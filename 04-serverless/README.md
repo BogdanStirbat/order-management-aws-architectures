@@ -1,0 +1,1 @@
+# Architecture 4: Serverless architecture.

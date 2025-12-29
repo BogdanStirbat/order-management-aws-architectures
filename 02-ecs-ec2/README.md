@@ -1,0 +1,1 @@
+# Architecture 2: Deployed on ECS using the EC2 launch type.

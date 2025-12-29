@@ -1,0 +1,1 @@
+# Architecture 3: Deployed on ECS using the Fargate launch type.

@@ -1,0 +1,1 @@
+# Architecture 1: deployed on EC2 using AMI.
