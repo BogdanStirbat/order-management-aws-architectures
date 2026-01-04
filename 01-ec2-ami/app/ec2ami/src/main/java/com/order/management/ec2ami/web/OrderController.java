@@ -5,6 +5,13 @@ import com.order.management.ec2ami.service.OrderService;
 import com.order.management.ec2ami.web.dto.CreateOrderRequest;
 import com.order.management.ec2ami.web.dto.OrderResponse;
 import com.order.management.ec2ami.web.mapper.OrderMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@Tag(name = "Orders", description = "Operations related to orders")
 @RestController
 @RequestMapping("/orders")
 public class OrderController {
@@ -26,7 +34,24 @@ public class OrderController {
   }
 
   @PostMapping
+  @Operation(
+      summary = "Create an order",
+      description = "Creates an order and returns the created resource plus a Location header."
+  )
+  @ApiResponses({
+      @ApiResponse(
+          responseCode = "201",
+          description = "Order created",
+          content = @Content(schema = @Schema(implementation = OrderResponse.class))
+      ),
+      @ApiResponse(responseCode = "400", description = "Validation error", content = @Content)
+  })
   public ResponseEntity<OrderResponse> createOrder(
+      @io.swagger.v3.oas.annotations.parameters.RequestBody(
+          required = true,
+          description = "Order creation payload",
+          content = @Content(schema = @Schema(implementation = CreateOrderRequest.class))
+      )
       @RequestBody @Valid CreateOrderRequest request,
       UriComponentsBuilder uriComponentsBuilder) {
 
@@ -40,7 +65,17 @@ public class OrderController {
   }
 
   @GetMapping("/{id}")
-  public ResponseEntity<OrderResponse> getOrder(@PathVariable Long id) {
+  @Operation(summary = "Get an order by id")
+  @ApiResponses({
+      @ApiResponse(
+          responseCode = "200",
+          description = "Order found",
+          content = @Content(schema = @Schema(implementation = OrderResponse.class))
+      ),
+      @ApiResponse(responseCode = "404", description = "Order not found", content = @Content)
+  })
+  public ResponseEntity<OrderResponse> getOrder(
+      @Parameter(description = "Order id", example = "123") @PathVariable Long id) {
 
     Order order = orderService.getOrder(id);
 

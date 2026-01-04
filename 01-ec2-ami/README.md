@@ -24,3 +24,18 @@ java -jar target/ec2ami-0.0.1-SNAPSHOT.jar
 ### Option 2. From the IDE.
 
 Locate, in the IDE, the `TestEc2amiApplication` class. Run it from the IDE.
+
+## API documentation 
+
+OpenAPI specification is exposed at the following paths:
+
+API-docs path:
+```
+/v3/api-docs
+```
+
+Swagger-UI path:
+```
+/swagger-ui/index.html
+```
+
