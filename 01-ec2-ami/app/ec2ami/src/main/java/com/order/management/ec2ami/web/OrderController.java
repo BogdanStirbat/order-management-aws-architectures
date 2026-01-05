@@ -1,6 +1,7 @@
 package com.order.management.ec2ami.web;
 
 import com.order.management.ec2ami.entity.Order;
+import com.order.management.ec2ami.enums.OrderStatus;
 import com.order.management.ec2ami.service.OrderService;
 import com.order.management.ec2ami.web.dto.CreateOrderRequest;
 import com.order.management.ec2ami.web.dto.OrderResponse;
@@ -14,6 +15,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springdoc.core.converters.models.PageableAsQueryParam;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,6 +28,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -121,5 +129,43 @@ public class OrderController {
     Order canceledOrder = orderService.cancelOrder(id);
 
     return ResponseEntity.ok(OrderMapper.toResponse(canceledOrder));
+  }
+
+  @GetMapping
+  @Operation(
+      summary = "List orders",
+      description = """
+        Returns orders, optionally filtered by status.
+
+        Defaults:
+        - page=0
+        - size=20
+        - sort=id,asc
+        """
+  )
+  @ApiResponses({
+      @ApiResponse(
+          responseCode = "200",
+          description = "Page of orders returned"
+      ),
+      @ApiResponse(responseCode = "400", description = "Invalid query parameter", content = @Content)
+  })
+  @PageableAsQueryParam
+  public ResponseEntity<Page<OrderResponse>> listOrders(
+      @Parameter(
+          description = "Optional status filter",
+          schema = @Schema(implementation = OrderStatus.class),
+          example = "CREATED"
+      )
+      @RequestParam(name = "status", required = false) OrderStatus status,
+
+      @ParameterObject
+      @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.ASC)
+      Pageable pageable
+  ) {
+    Page<OrderResponse> page = orderService.getOrders(status, pageable)
+        .map(OrderMapper::toResponse);
+
+    return ResponseEntity.ok(page);
   }
 }

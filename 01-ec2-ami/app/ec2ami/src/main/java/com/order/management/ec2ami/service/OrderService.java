@@ -5,6 +5,8 @@ import com.order.management.ec2ami.enums.OrderStatus;
 import com.order.management.ec2ami.repository.OrderRepository;
 import com.order.management.ec2ami.service.exception.OrderNotFoundException;
 import java.math.BigDecimal;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,5 +48,13 @@ public class OrderService {
 
     order.setStatus(OrderStatus.CANCELLED);
     return orderRepository.save(order);
+  }
+
+  @Transactional(readOnly = true)
+  public Page<Order> getOrders(OrderStatus status, Pageable pageable) {
+    if (status == null) {
+      return orderRepository.findAll(pageable);
+    }
+    return orderRepository.findAllByStatus(status, pageable);
   }
 }
