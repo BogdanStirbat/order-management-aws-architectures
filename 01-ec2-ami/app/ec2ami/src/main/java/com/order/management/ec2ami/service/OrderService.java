@@ -33,4 +33,18 @@ public class OrderService {
     return orderRepository.findById(id)
         .orElseThrow(() -> new OrderNotFoundException(id));
   }
+
+  @Transactional
+  public Order cancelOrder(Long id) {
+
+    Order order = orderRepository.findById(id)
+        .orElseThrow(() -> new OrderNotFoundException(id));
+
+    if (order.getStatus() == OrderStatus.CANCELLED) {
+      return order;
+    }
+
+    order.setStatus(OrderStatus.CANCELLED);
+    return orderRepository.save(order);
+  }
 }

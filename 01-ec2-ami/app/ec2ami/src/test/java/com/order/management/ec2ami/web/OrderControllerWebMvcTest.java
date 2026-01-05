@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -97,6 +98,56 @@ class OrderControllerWebMvcTest {
 
     // when && then
     mvc.perform(get("/orders/999"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void putCancel_createdOrder_returns200_withCancelledBody() throws Exception {
+
+    // given
+    Order cancelled = new Order();
+    cancelled.setId(1L);
+    cancelled.setStatus(OrderStatus.CANCELLED);
+    cancelled.setTotalAmount(new BigDecimal("100"));
+
+    when(orderService.cancelOrder(1L)).thenReturn(cancelled);
+
+    // when && then
+    mvc.perform(put("/orders/1/cancel"))
+        .andExpect(status().isOk())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+        .andExpect(jsonPath("$.id").value(1))
+        .andExpect(jsonPath("$.status").value("CANCELLED"))
+        .andExpect(jsonPath("$.totalAmount").value(100.00));
+  }
+
+  @Test
+  void putCancel_alreadyCancelled_returns200_idempotent() throws Exception {
+
+    // given
+    Order alreadyCancelled = new Order();
+    alreadyCancelled.setId(1L);
+    alreadyCancelled.setStatus(OrderStatus.CANCELLED);
+    alreadyCancelled.setTotalAmount(new BigDecimal("100"));
+
+    when(orderService.cancelOrder(1L)).thenReturn(alreadyCancelled);
+
+    // when && then
+    mvc.perform(put("/orders/1/cancel"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(1))
+        .andExpect(jsonPath("$.status").value("CANCELLED"))
+        .andExpect(jsonPath("$.totalAmount").value(100.00));
+  }
+
+  @Test
+  void putCancel_notFound_returns404() throws Exception {
+
+    // given
+    when(orderService.cancelOrder(999L)).thenThrow(new OrderNotFoundException(999L));
+
+    // when && then
+    mvc.perform(put("/orders/999/cancel"))
         .andExpect(status().isNotFound());
   }
 
