@@ -1,0 +1,382 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Orders App network + security:
+  - VPC 10.0.0.0/16
+  - Public subnets (AZ A/B), Private App subnets (AZ A/B), Private DB subnets (AZ A/B)
+  - Internet Gateway + Public Route Table (0.0.0.0/0 -> IGW)
+  - NAT Gateways (AZ A/B) with EIPs
+  - Private Route Tables (AZ A/B) (0.0.0.0/0 -> NAT in same AZ)
+  - Security Groups (ingress-only; default allow-all egress):
+      * ALB SG
+      * App SG (shared across both AZs)
+      * DB SG (shared across both AZs)
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+
+  PublicSubnetAzACidr:
+    Type: String
+    Default: 10.0.0.0/24
+  PublicSubnetAzBCidr:
+    Type: String
+    Default: 10.0.1.0/24
+
+  PrivateAppSubnetAzACidr:
+    Type: String
+    Default: 10.0.10.0/24
+  PrivateAppSubnetAzBCidr:
+    Type: String
+    Default: 10.0.11.0/24
+
+  PrivateDbSubnetAzACidr:
+    Type: String
+    Default: 10.0.20.0/24
+  PrivateDbSubnetAzBCidr:
+    Type: String
+    Default: 10.0.21.0/24
+
+Resources:
+  # ----------------------------
+  # VPC
+  # ----------------------------
+  OrdersAppVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: orders-app-vpc-01
+
+  # ----------------------------
+  # Subnets
+  # ----------------------------
+  OrdersAppPublicSubnetAzA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref OrdersAppVPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Ref PublicSubnetAzACidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: orders-app-public-az-a
+
+  OrdersAppPublicSubnetAzB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref OrdersAppVPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Ref PublicSubnetAzBCidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: orders-app-public-az-b
+
+  OrdersAppPrivateAppSubnetAzA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref OrdersAppVPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Ref PrivateAppSubnetAzACidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: orders-app-private-app-az-a
+
+  OrdersAppPrivateAppSubnetAzB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref OrdersAppVPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Ref PrivateAppSubnetAzBCidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: orders-app-private-app-az-b
+
+  OrdersAppPrivateDbSubnetAzA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref OrdersAppVPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Ref PrivateDbSubnetAzACidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: orders-app-private-db-az-a
+
+  OrdersAppPrivateDbSubnetAzB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref OrdersAppVPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Ref PrivateDbSubnetAzBCidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: orders-app-private-db-az-b
+
+  # ----------------------------
+  # Internet Gateway
+  # ----------------------------
+  OrdersAppInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: orders-app-internet-gateway
+
+  OrdersAppIgwAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref OrdersAppVPC
+      InternetGatewayId: !Ref OrdersAppInternetGateway
+
+  # ----------------------------
+  # Public Route Table + Routes + Associations
+  # ----------------------------
+  OrdersAppPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref OrdersAppVPC
+      Tags:
+        - Key: Name
+          Value: orders-app-public-route-table
+
+  OrdersAppPublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: OrdersAppIgwAttachment
+    Properties:
+      RouteTableId: !Ref OrdersAppPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref OrdersAppInternetGateway
+
+  OrdersAppPublicSubnetAzAAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref OrdersAppPublicSubnetAzA
+      RouteTableId: !Ref OrdersAppPublicRouteTable
+
+  OrdersAppPublicSubnetAzBAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref OrdersAppPublicSubnetAzB
+      RouteTableId: !Ref OrdersAppPublicRouteTable
+
+  # ----------------------------
+  # NAT Gateways + EIPs
+  # ----------------------------
+  OrdersAppNatEipAzA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: orders-app-nat-eip-az-a
+
+  OrdersAppNatGatewayAzA:
+    Type: AWS::EC2::NatGateway
+    DependsOn: OrdersAppIgwAttachment
+    Properties:
+      AllocationId: !GetAtt OrdersAppNatEipAzA.AllocationId
+      SubnetId: !Ref OrdersAppPublicSubnetAzA
+      Tags:
+        - Key: Name
+          Value: orders-app-nat-gateway-az-a
+
+  OrdersAppNatEipAzB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: orders-app-nat-eip-az-b
+
+  OrdersAppNatGatewayAzB:
+    Type: AWS::EC2::NatGateway
+    DependsOn: OrdersAppIgwAttachment
+    Properties:
+      AllocationId: !GetAtt OrdersAppNatEipAzB.AllocationId
+      SubnetId: !Ref OrdersAppPublicSubnetAzB
+      Tags:
+        - Key: Name
+          Value: orders-app-nat-gateway-az-b
+
+  # ----------------------------
+  # Private Route Tables + Routes + Associations
+  # ----------------------------
+  OrdersAppPrivateRouteTableAzA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref OrdersAppVPC
+      Tags:
+        - Key: Name
+          Value: orders-app-nat-gateway-az-a-route-table
+
+  OrdersAppPrivateDefaultRouteAzA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref OrdersAppPrivateRouteTableAzA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref OrdersAppNatGatewayAzA
+
+  OrdersAppPrivateAppSubnetAzAAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref OrdersAppPrivateAppSubnetAzA
+      RouteTableId: !Ref OrdersAppPrivateRouteTableAzA
+
+  OrdersAppPrivateDbSubnetAzAAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref OrdersAppPrivateDbSubnetAzA
+      RouteTableId: !Ref OrdersAppPrivateRouteTableAzA
+
+  OrdersAppPrivateRouteTableAzB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref OrdersAppVPC
+      Tags:
+        - Key: Name
+          Value: orders-app-nat-gateway-az-b-route-table
+
+  OrdersAppPrivateDefaultRouteAzB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref OrdersAppPrivateRouteTableAzB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref OrdersAppNatGatewayAzB
+
+  OrdersAppPrivateAppSubnetAzBAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref OrdersAppPrivateAppSubnetAzB
+      RouteTableId: !Ref OrdersAppPrivateRouteTableAzB
+
+  OrdersAppPrivateDbSubnetAzBAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref OrdersAppPrivateDbSubnetAzB
+      RouteTableId: !Ref OrdersAppPrivateRouteTableAzB
+
+  # ----------------------------
+  # Security Groups (ingress-only)
+  # ----------------------------
+
+  OrdersAppAlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB security group for orders app
+      VpcId: !Ref OrdersAppVPC
+      Tags:
+        - Key: Name
+          Value: orders-app-sg-alb
+
+  OrdersAppAppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: App security group (shared) for orders app
+      VpcId: !Ref OrdersAppVPC
+      Tags:
+        - Key: Name
+          Value: orders-app-sg-app
+
+  OrdersAppDbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: DB security group (shared) for orders app
+      VpcId: !Ref OrdersAppVPC
+      Tags:
+        - Key: Name
+          Value: orders-app-sg-db
+
+  # --- Ingress rules ---
+
+  OrdersAppAlbIngressHttp:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref OrdersAppAlbSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp: 0.0.0.0/0
+
+  OrdersAppAlbIngressHttps:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref OrdersAppAlbSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: 0.0.0.0/0
+
+  OrdersAppAppIngressFromAlb8080:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref OrdersAppAppSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      SourceSecurityGroupId: !Ref OrdersAppAlbSecurityGroup
+
+  OrdersAppDbIngressFromApp5432:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref OrdersAppDbSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref OrdersAppAppSecurityGroup
+
+Outputs:
+  VpcId:
+    Description: VPC Id
+    Value: !Ref OrdersAppVPC
+
+  PublicSubnetAzAId:
+    Description: Public Subnet AZ-A Id
+    Value: !Ref OrdersAppPublicSubnetAzA
+  PublicSubnetAzBId:
+    Description: Public Subnet AZ-B Id
+    Value: !Ref OrdersAppPublicSubnetAzB
+
+  PrivateAppSubnetAzAId:
+    Description: Private App Subnet AZ-A Id
+    Value: !Ref OrdersAppPrivateAppSubnetAzA
+  PrivateAppSubnetAzBId:
+    Description: Private App Subnet AZ-B Id
+    Value: !Ref OrdersAppPrivateAppSubnetAzB
+
+  PrivateDbSubnetAzAId:
+    Description: Private DB Subnet AZ-A Id
+    Value: !Ref OrdersAppPrivateDbSubnetAzA
+  PrivateDbSubnetAzBId:
+    Description: Private DB Subnet AZ-B Id
+    Value: !Ref OrdersAppPrivateDbSubnetAzB
+
+  InternetGatewayId:
+    Description: Internet Gateway Id
+    Value: !Ref OrdersAppInternetGateway
+
+  NatGatewayAzAId:
+    Description: NAT Gateway AZ-A Id
+    Value: !Ref OrdersAppNatGatewayAzA
+  NatGatewayAzBId:
+    Description: NAT Gateway AZ-B Id
+    Value: !Ref OrdersAppNatGatewayAzB
+
+  AlbSecurityGroupId:
+    Description: ALB Security Group Id
+    Value: !Ref OrdersAppAlbSecurityGroup
+
+  AppSecurityGroupId:
+    Description: App Security Group Id (shared across AZs)
+    Value: !Ref OrdersAppAppSecurityGroup
+
+  DbSecurityGroupId:
+    Description: DB Security Group Id (shared across AZs)
+    Value: !Ref OrdersAppDbSecurityGroup
