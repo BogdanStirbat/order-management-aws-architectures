@@ -16,6 +16,14 @@ Build the app:
 mvn clean install
 ```
 
+Set, in the terminal window that will run the app, the following environment variables:
+
+```
+export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/orders_db
+export SPRING_DATASOURCE_USERNAME=orders_user
+export SPRING_DATASOURCE_PASSWORD=mysecretpassword
+```
+
 Run the app:
 ```
 java -jar target/ec2ami-0.0.1-SNAPSHOT.jar
