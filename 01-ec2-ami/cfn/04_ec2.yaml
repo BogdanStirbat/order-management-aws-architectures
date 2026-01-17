@@ -1,0 +1,230 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Orders App - Compute stack (Spring Boot on 8080, Java 21):
+  - Launch Template + ASG in private app subnets (AZ A/B)
+  - Registers instances to an existing ALB Target Group
+  - Governed by OrdersAppAppSecurityGroup
+  - SSM Session Manager enabled via IAM role + instance profile
+  - Downloads application JAR from a public S3 HTTPS URL parameter
+  - Injects SPRING_DATASOURCE_* from CloudFormation parameters
+
+Parameters:
+  PrivateAppSubnetAzAId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID for orders-app-private-app-az-a
+
+  PrivateAppSubnetAzBId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID for orders-app-private-app-az-b
+
+  AppSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security Group ID for OrdersAppAppSecurityGroup
+
+  TargetGroupArn:
+    Type: String
+    Description: Target Group ARN output from the ALB stack
+
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Description: AMI ID (recommended: Amazon Linux 2023)
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: EC2 instance type
+
+  DesiredCapacity:
+    Type: Number
+    Default: 2
+    MinValue: 0
+
+  MinSize:
+    Type: Number
+    Default: 2
+    MinValue: 0
+
+  MaxSize:
+    Type: Number
+    Default: 2
+    MinValue: 0
+
+  AppPort:
+    Type: Number
+    Default: 8080
+    Description: Spring Boot port
+
+  AppJarUrl:
+    Type: String
+    Description: >
+      Public HTTPS URL to download the Spring Boot jar,
+      e.g. https://YOUR_BUCKET_NAME.s3.REGION.amazonaws.com/orders-app-0.1.0.jar
+
+  # ----------------------------
+  # DB settings to inject into Spring Boot env vars
+  # ----------------------------
+  DbEndpointAddress:
+    Type: String
+    Description: RDS endpoint address (output DbEndpointAddress from DB stack)
+
+  DbEndpointPort:
+    Type: Number
+    Default: 5432
+    Description: RDS endpoint port (output DbEndpointPort from DB stack)
+
+  DbName:
+    Type: String
+    Default: ordersdb
+    Description: Database name (must match the DB you created)
+
+  DbUsername:
+    Type: String
+    Description: Database username for the application
+
+  DbPassword:
+    Type: String
+    NoEcho: true
+    Description: Database password for the application user
+
+Resources:
+  # ----------------------------
+  # IAM role/profile for SSM Session Manager
+  # ----------------------------
+  OrdersAppEc2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "orders-app-ec2-ssm-role-${AWS::StackName}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ["sts:AssumeRole"]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - Key: Name
+          Value: orders-app-ec2-ssm-role
+
+  OrdersAppEc2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "orders-app-ec2-instance-profile-${AWS::StackName}"
+      Roles:
+        - !Ref OrdersAppEc2Role
+
+  # ----------------------------
+  # Launch Template
+  # ----------------------------
+  OrdersAppLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "orders-app-launch-template-${AWS::StackName}"
+      LaunchTemplateData:
+        ImageId: !Ref AmiId
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile:
+          Name: !Ref OrdersAppEc2InstanceProfile
+        SecurityGroupIds:
+          - !Ref AppSecurityGroupId
+        UserData:
+          Fn::Base64: !Sub
+            - |
+              #!/bin/bash
+              set -euxo pipefail
+
+              # ---- Packages ----
+              dnf -y update
+              dnf -y install java-21-amazon-corretto curl
+
+              # ---- App user + directories ----
+              id -u ordersapp &>/dev/null || useradd --system --create-home --shell /sbin/nologin ordersapp
+              mkdir -p /opt/orders-app
+              chown -R ordersapp:ordersapp /opt/orders-app
+
+              # ---- Fetch the application jar from public S3 URL ----
+              curl -fL "${AppJarUrl}" -o /opt/orders-app/app.jar
+              chown ordersapp:ordersapp /opt/orders-app/app.jar
+              chmod 0644 /opt/orders-app/app.jar
+
+              # ---- Write environment file for systemd (keeps secrets out of unit file) ----
+              cat >/etc/orders-app.env <<EOF
+              SPRING_DATASOURCE_URL=${JdbcUrl}
+              SPRING_DATASOURCE_USERNAME=${DbUsername}
+              SPRING_DATASOURCE_PASSWORD=${DbPassword}
+              EOF
+              chmod 0600 /etc/orders-app.env
+
+              # ---- systemd service ----
+              cat >/etc/systemd/system/orders-app.service <<'EOF'
+              [Unit]
+              Description=Orders App (Spring Boot)
+              After=network-online.target
+              Wants=network-online.target
+
+              [Service]
+              Type=simple
+              User=ordersapp
+              WorkingDirectory=/opt/orders-app
+              EnvironmentFile=/etc/orders-app.env
+              ExecStart=/usr/bin/java -jar /opt/orders-app/app.jar --server.port=${AppPort}
+              Restart=always
+              RestartSec=5
+              SuccessExitStatus=143
+
+              [Install]
+              WantedBy=multi-user.target
+              EOF
+
+              systemctl daemon-reload
+              systemctl enable --now orders-app.service
+
+              echo "Orders App started on port ${AppPort}" > /var/tmp/orders-app-status.txt
+            - JdbcUrl: !Sub "jdbc:postgresql://${DbEndpointAddress}:${DbEndpointPort}/${DbName}"
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: orders-app-asg-instance
+
+  # ----------------------------
+  # Auto Scaling Group
+  # ----------------------------
+  OrdersAppAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PrivateAppSubnetAzAId
+        - !Ref PrivateAppSubnetAzBId
+      MinSize: !Ref MinSize
+      MaxSize: !Ref MaxSize
+      DesiredCapacity: !Ref DesiredCapacity
+      LaunchTemplate:
+        LaunchTemplateId: !Ref OrdersAppLaunchTemplate
+        Version: !GetAtt OrdersAppLaunchTemplate.LatestVersionNumber
+      TargetGroupARNs:
+        - !Ref TargetGroupArn
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: orders-app-asg
+          PropagateAtLaunch: true
+
+Outputs:
+  LaunchTemplateId:
+    Description: Launch Template ID
+    Value: !Ref OrdersAppLaunchTemplate
+
+  AutoScalingGroupName:
+    Description: Auto Scaling Group name
+    Value: !Ref OrdersAppAutoScalingGroup
+
+  Ec2RoleName:
+    Description: IAM Role attached to instances for SSM
+    Value: !Ref OrdersAppEc2Role
+
+  InstanceProfileName:
+    Description: Instance profile attached to instances for SSM
+    Value: !Ref OrdersAppEc2InstanceProfile

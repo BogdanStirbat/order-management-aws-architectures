@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Orders App - ALB stack:
+  - Internet-facing ALB in public subnets (AZ A/B)
+  - Target Group (HTTP:8080) in the VPC
+  - Listener on port 80 forwarding to the Target Group
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC Id for orders-app-vpc-01
+
+  PublicSubnetAzAId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID for orders-app-public-az-a
+
+  PublicSubnetAzBId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID for orders-app-public-az-b
+
+  AlbSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security Group ID for OrdersAppAlbSecurityGroup
+
+  TargetPort:
+    Type: Number
+    Default: 8080
+    Description: Port your app listens on (targets)
+
+  HealthCheckPath:
+    Type: String
+    Default: /actuator/health/readiness
+    Description: Health check path on your app
+
+Resources:
+  OrdersAppAlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: orders-app-alb
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      Subnets:
+        - !Ref PublicSubnetAzAId
+        - !Ref PublicSubnetAzBId
+      SecurityGroups:
+        - !Ref AlbSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: orders-app-alb
+
+  OrdersAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: orders-app-tg
+      VpcId: !Ref VpcId
+      TargetType: instance
+      Protocol: HTTP
+      Port: !Ref TargetPort
+      HealthCheckEnabled: true
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
+      HealthCheckPath: !Ref HealthCheckPath
+      Matcher:
+        HttpCode: "200-399"
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      HealthCheckIntervalSeconds: 15
+      HealthCheckTimeoutSeconds: 5
+      Tags:
+        - Key: Name
+          Value: orders-app-tg
+
+  OrdersAppHttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref OrdersAppAlb
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref OrdersAppTargetGroup
+
+Outputs:
+  AlbArn:
+    Description: ALB ARN
+    Value: !Ref OrdersAppAlb
+
+  AlbDnsName:
+    Description: ALB DNS name
+    Value: !GetAtt OrdersAppAlb.DNSName
+
+  TargetGroupArn:
+    Description: Target Group ARN (pass to Compute/ASG stack)
+    Value: !Ref OrdersAppTargetGroup

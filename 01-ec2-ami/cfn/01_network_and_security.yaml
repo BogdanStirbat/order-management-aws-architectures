@@ -207,20 +207,20 @@ Resources:
           Value: orders-app-nat-gateway-az-b
 
   # ----------------------------
-  # Private Route Tables + Routes + Associations
+  # Private Route Tables + Routes + Associations - App Layer
   # ----------------------------
-  OrdersAppPrivateRouteTableAzA:
+  OrdersAppAppPrivateRouteTableAzA:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref OrdersAppVPC
       Tags:
         - Key: Name
-          Value: orders-app-nat-gateway-az-a-route-table
+          Value: orders-app-app-nat-gateway-az-a-route-table
 
   OrdersAppPrivateDefaultRouteAzA:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref OrdersAppPrivateRouteTableAzA
+      RouteTableId: !Ref OrdersAppAppPrivateRouteTableAzA
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref OrdersAppNatGatewayAzA
 
@@ -228,26 +228,20 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref OrdersAppPrivateAppSubnetAzA
-      RouteTableId: !Ref OrdersAppPrivateRouteTableAzA
+      RouteTableId: !Ref OrdersAppAppPrivateRouteTableAzA
 
-  OrdersAppPrivateDbSubnetAzAAssoc:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref OrdersAppPrivateDbSubnetAzA
-      RouteTableId: !Ref OrdersAppPrivateRouteTableAzA
-
-  OrdersAppPrivateRouteTableAzB:
+  OrdersAppAppPrivateRouteTableAzB:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref OrdersAppVPC
       Tags:
         - Key: Name
-          Value: orders-app-nat-gateway-az-b-route-table
+          Value: orders-app-app-nat-gateway-az-b-route-table
 
   OrdersAppPrivateDefaultRouteAzB:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref OrdersAppPrivateRouteTableAzB
+      RouteTableId: !Ref OrdersAppAppPrivateRouteTableAzB
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref OrdersAppNatGatewayAzB
 
@@ -255,13 +249,38 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref OrdersAppPrivateAppSubnetAzB
-      RouteTableId: !Ref OrdersAppPrivateRouteTableAzB
+      RouteTableId: !Ref OrdersAppAppPrivateRouteTableAzB
+
+  # ----------------------------
+  # Private Route Tables + Routes + Associations - Db Layer
+  # ----------------------------
+  OrdersAppDbPrivateRouteTableAzA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref OrdersAppVPC
+      Tags:
+        - Key: Name
+          Value: orders-app-db-az-a-route-table
+
+  OrdersAppPrivateDbSubnetAzAAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref OrdersAppPrivateDbSubnetAzA
+      RouteTableId: !Ref OrdersAppDbPrivateRouteTableAzA
+
+  OrdersAppDbPrivateRouteTableAzB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref OrdersAppVPC
+      Tags:
+        - Key: Name
+          Value: orders-app-db-az-b-route-table
 
   OrdersAppPrivateDbSubnetAzBAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref OrdersAppPrivateDbSubnetAzB
-      RouteTableId: !Ref OrdersAppPrivateRouteTableAzB
+      RouteTableId: !Ref OrdersAppDbPrivateRouteTableAzB
 
   # ----------------------------
   # Security Groups (ingress-only)
