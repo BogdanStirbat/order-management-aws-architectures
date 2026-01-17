@@ -1,15 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Orders App network + security:
-  - VPC 10.0.0.0/16
-  - Public subnets (AZ A/B), Private App subnets (AZ A/B), Private DB subnets (AZ A/B)
-  - Internet Gateway + Public Route Table (0.0.0.0/0 -> IGW)
-  - NAT Gateways (AZ A/B) with EIPs
-  - Private Route Tables (AZ A/B) (0.0.0.0/0 -> NAT in same AZ)
-  - Security Groups (ingress-only; default allow-all egress):
-      * ALB SG
-      * App SG (shared across both AZs)
-      * DB SG (shared across both AZs)
+  Orders App network + security (exports VPC/subnets/SGs for other stacks).
 
 Parameters:
   VpcCidr:
@@ -37,9 +28,14 @@ Parameters:
     Type: String
     Default: 10.0.21.0/24
 
+  ExportPrefix:
+    Type: String
+    Default: orders-app
+    Description: Prefix used for CloudFormation Exports (must be unique per account+region)
+
 Resources:
-  # ----------------------------
-  # VPC
+  # ---------------------------- 
+  # VPC 
   # ----------------------------
   OrdersAppVPC:
     Type: AWS::EC2::VPC
@@ -51,8 +47,8 @@ Resources:
         - Key: Name
           Value: orders-app-vpc-01
 
-  # ----------------------------
-  # Subnets
+  # ---------------------------- 
+  # Subnets 
   # ----------------------------
   OrdersAppPublicSubnetAzA:
     Type: AWS::EC2::Subnet
@@ -120,8 +116,9 @@ Resources:
         - Key: Name
           Value: orders-app-private-db-az-b
 
-  # ----------------------------
-  # Internet Gateway
+
+  # ---------------------------- 
+  # Internet Gateway 
   # ----------------------------
   OrdersAppInternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -136,8 +133,8 @@ Resources:
       VpcId: !Ref OrdersAppVPC
       InternetGatewayId: !Ref OrdersAppInternetGateway
 
-  # ----------------------------
-  # Public Route Table + Routes + Associations
+  # ---------------------------- 
+  # Public Route Table + Routes + Associations 
   # ----------------------------
   OrdersAppPublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -167,8 +164,8 @@ Resources:
       SubnetId: !Ref OrdersAppPublicSubnetAzB
       RouteTableId: !Ref OrdersAppPublicRouteTable
 
-  # ----------------------------
-  # NAT Gateways + EIPs
+  # ---------------------------- 
+  # NAT Gateways + EIPs 
   # ----------------------------
   OrdersAppNatEipAzA:
     Type: AWS::EC2::EIP
@@ -206,8 +203,8 @@ Resources:
         - Key: Name
           Value: orders-app-nat-gateway-az-b
 
-  # ----------------------------
-  # Private Route Tables + Routes + Associations - App Layer
+  # ---------------------------- 
+  # Private Route Tables + Routes + Associations - App Layer 
   # ----------------------------
   OrdersAppAppPrivateRouteTableAzA:
     Type: AWS::EC2::RouteTable
@@ -251,8 +248,9 @@ Resources:
       SubnetId: !Ref OrdersAppPrivateAppSubnetAzB
       RouteTableId: !Ref OrdersAppAppPrivateRouteTableAzB
 
-  # ----------------------------
-  # Private Route Tables + Routes + Associations - Db Layer
+
+  # ---------------------------- 
+  # Private Route Tables + Routes + Associations - Db Layer 
   # ----------------------------
   OrdersAppDbPrivateRouteTableAzA:
     Type: AWS::EC2::RouteTable
@@ -282,10 +280,9 @@ Resources:
       SubnetId: !Ref OrdersAppPrivateDbSubnetAzB
       RouteTableId: !Ref OrdersAppDbPrivateRouteTableAzB
 
+  # ---------------------------- 
+  # Security Groups (ingress-only) 
   # ----------------------------
-  # Security Groups (ingress-only)
-  # ----------------------------
-
   OrdersAppAlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -313,8 +310,9 @@ Resources:
         - Key: Name
           Value: orders-app-sg-db
 
-  # --- Ingress rules ---
-
+  # ---------------------------- 
+  # Ingress rules
+  # ----------------------------
   OrdersAppAlbIngressHttp:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -355,47 +353,59 @@ Outputs:
   VpcId:
     Description: VPC Id
     Value: !Ref OrdersAppVPC
+    Export:
+      Name: !Sub "${ExportPrefix}:VpcId"
 
   PublicSubnetAzAId:
     Description: Public Subnet AZ-A Id
     Value: !Ref OrdersAppPublicSubnetAzA
+    Export:
+      Name: !Sub "${ExportPrefix}:PublicSubnetAzAId"
+
   PublicSubnetAzBId:
     Description: Public Subnet AZ-B Id
     Value: !Ref OrdersAppPublicSubnetAzB
+    Export:
+      Name: !Sub "${ExportPrefix}:PublicSubnetAzBId"
 
   PrivateAppSubnetAzAId:
     Description: Private App Subnet AZ-A Id
     Value: !Ref OrdersAppPrivateAppSubnetAzA
+    Export:
+      Name: !Sub "${ExportPrefix}:PrivateAppSubnetAzAId"
+
   PrivateAppSubnetAzBId:
     Description: Private App Subnet AZ-B Id
     Value: !Ref OrdersAppPrivateAppSubnetAzB
+    Export:
+      Name: !Sub "${ExportPrefix}:PrivateAppSubnetAzBId"
 
   PrivateDbSubnetAzAId:
     Description: Private DB Subnet AZ-A Id
     Value: !Ref OrdersAppPrivateDbSubnetAzA
+    Export:
+      Name: !Sub "${ExportPrefix}:PrivateDbSubnetAzAId"
+
   PrivateDbSubnetAzBId:
     Description: Private DB Subnet AZ-B Id
     Value: !Ref OrdersAppPrivateDbSubnetAzB
-
-  InternetGatewayId:
-    Description: Internet Gateway Id
-    Value: !Ref OrdersAppInternetGateway
-
-  NatGatewayAzAId:
-    Description: NAT Gateway AZ-A Id
-    Value: !Ref OrdersAppNatGatewayAzA
-  NatGatewayAzBId:
-    Description: NAT Gateway AZ-B Id
-    Value: !Ref OrdersAppNatGatewayAzB
+    Export:
+      Name: !Sub "${ExportPrefix}:PrivateDbSubnetAzBId"
 
   AlbSecurityGroupId:
     Description: ALB Security Group Id
     Value: !Ref OrdersAppAlbSecurityGroup
+    Export:
+      Name: !Sub "${ExportPrefix}:AlbSecurityGroupId"
 
   AppSecurityGroupId:
-    Description: App Security Group Id (shared across AZs)
+    Description: App Security Group Id
     Value: !Ref OrdersAppAppSecurityGroup
+    Export:
+      Name: !Sub "${ExportPrefix}:AppSecurityGroupId"
 
   DbSecurityGroupId:
-    Description: DB Security Group Id (shared across AZs)
+    Description: Db Security Group Id
     Value: !Ref OrdersAppDbSecurityGroup
+    Export:
+      Name: !Sub "${ExportPrefix}:DbSecurityGroupId"

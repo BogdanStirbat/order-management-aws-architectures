@@ -1,36 +1,19 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Orders App - ALB stack:
-  - Internet-facing ALB in public subnets (AZ A/B)
-  - Target Group (HTTP:8080) in the VPC
-  - Listener on port 80 forwarding to the Target Group
+  Orders App - ALB stack (imports VPC + public subnets + ALB SG; exports target group + ALB DNS).
 
 Parameters:
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: VPC Id for orders-app-vpc-01
-
-  PublicSubnetAzAId:
-    Type: AWS::EC2::Subnet::Id
-    Description: Subnet ID for orders-app-public-az-a
-
-  PublicSubnetAzBId:
-    Type: AWS::EC2::Subnet::Id
-    Description: Subnet ID for orders-app-public-az-b
-
-  AlbSecurityGroupId:
-    Type: AWS::EC2::SecurityGroup::Id
-    Description: Security Group ID for OrdersAppAlbSecurityGroup
+  ExportPrefix:
+    Type: String
+    Default: orders-app
 
   TargetPort:
     Type: Number
     Default: 8080
-    Description: Port your app listens on (targets)
 
   HealthCheckPath:
     Type: String
     Default: /actuator/health/readiness
-    Description: Health check path on your app
 
 Resources:
   OrdersAppAlb:
@@ -41,10 +24,13 @@ Resources:
       Type: application
       IpAddressType: ipv4
       Subnets:
-        - !Ref PublicSubnetAzAId
-        - !Ref PublicSubnetAzBId
+        - !ImportValue
+          Fn::Sub: "${ExportPrefix}:PublicSubnetAzAId"
+        - !ImportValue
+          Fn::Sub: "${ExportPrefix}:PublicSubnetAzBId"
       SecurityGroups:
-        - !Ref AlbSecurityGroupId
+        - !ImportValue
+          Fn::Sub: "${ExportPrefix}:AlbSecurityGroupId"
       Tags:
         - Key: Name
           Value: orders-app-alb
@@ -53,7 +39,8 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: orders-app-tg
-      VpcId: !Ref VpcId
+      VpcId: !ImportValue
+        Fn::Sub: "${ExportPrefix}:VpcId"
       TargetType: instance
       Protocol: HTTP
       Port: !Ref TargetPort
@@ -82,14 +69,12 @@ Resources:
           TargetGroupArn: !Ref OrdersAppTargetGroup
 
 Outputs:
-  AlbArn:
-    Description: ALB ARN
-    Value: !Ref OrdersAppAlb
-
   AlbDnsName:
-    Description: ALB DNS name
     Value: !GetAtt OrdersAppAlb.DNSName
+    Export:
+      Name: !Sub "${ExportPrefix}:AlbDnsName"
 
   TargetGroupArn:
-    Description: Target Group ARN (pass to Compute/ASG stack)
     Value: !Ref OrdersAppTargetGroup
+    Export:
+      Name: !Sub "${ExportPrefix}:AlbTargetGroupArn"

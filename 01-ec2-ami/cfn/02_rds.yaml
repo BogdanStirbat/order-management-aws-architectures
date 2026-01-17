@@ -1,19 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Orders App - RDS PostgreSQL Multi-AZ (private DB subnets AZ A/B) governed by orders-app-sg-db.
+  Orders App - RDS PostgreSQL Multi-AZ (imports DB subnets + DB SG from networking stack).
 
 Parameters:
-  PrivateDbSubnetAzAId:
-    Type: AWS::EC2::Subnet::Id
-    Description: Subnet ID for orders-app-private-db-az-a
-
-  PrivateDbSubnetAzBId:
-    Type: AWS::EC2::Subnet::Id
-    Description: Subnet ID for orders-app-private-db-az-b
-
-  DbSecurityGroupId:
-    Type: AWS::EC2::SecurityGroup::Id
-    Description: Security Group ID for orders-app-sg-db
+  ExportPrefix:
+    Type: String
+    Default: orders-app
 
   DBName:
     Type: String
@@ -21,7 +13,6 @@ Parameters:
     MinLength: 1
     MaxLength: 63
     AllowedPattern: "^[a-zA-Z][a-zA-Z0-9_]*$"
-    Description: Initial database name
 
   DBInstanceIdentifier:
     Type: String
@@ -29,23 +20,19 @@ Parameters:
     MinLength: 1
     MaxLength: 63
     AllowedPattern: "^[a-zA-Z][a-zA-Z0-9-]*$"
-    Description: RDS instance identifier
 
   DBInstanceClass:
     Type: String
     Default: db.t4g.micro
-    Description: RDS instance class (pick what fits your workload)
 
   AllocatedStorageGB:
     Type: Number
     Default: 20
     MinValue: 20
-    Description: Allocated storage in GB
 
   EngineVersion:
     Type: String
     Default: "16.3"
-    Description: PostgreSQL engine version (adjust as needed)
 
   MasterUsername:
     Type: String
@@ -53,14 +40,12 @@ Parameters:
     MinLength: 1
     MaxLength: 16
     AllowedPattern: "^[a-zA-Z][a-zA-Z0-9_]*$"
-    Description: Master username
 
   MasterUserPassword:
     Type: String
     NoEcho: true
     MinLength: 8
     MaxLength: 41
-    Description: Master password (NoEcho)
 
   BackupRetentionDays:
     Type: Number
@@ -70,7 +55,7 @@ Parameters:
 
   DeletionProtection:
     Type: String
-    Default: "true"
+    Default: "false"
     AllowedValues: ["true", "false"]
 
 Resources:
@@ -79,8 +64,10 @@ Resources:
     Properties:
       DBSubnetGroupDescription: Orders App DB subnets (private) in AZ A/B
       SubnetIds:
-        - !Ref PrivateDbSubnetAzAId
-        - !Ref PrivateDbSubnetAzBId
+        - !ImportValue
+          Fn::Sub: "${ExportPrefix}:PrivateDbSubnetAzAId"
+        - !ImportValue
+          Fn::Sub: "${ExportPrefix}:PrivateDbSubnetAzBId"
       Tags:
         - Key: Name
           Value: orders-app-db-subnet-group
@@ -92,44 +79,29 @@ Resources:
       Engine: postgres
       EngineVersion: !Ref EngineVersion
       DBName: !Ref DBName
-
-      # Multi-AZ (synchronous standby in the other AZ)
       MultiAZ: true
-
-      # Networking / placement
       DBSubnetGroupName: !Ref OrdersAppDbSubnetGroup
       VPCSecurityGroups:
-        - !Ref DbSecurityGroupId
+        - !ImportValue
+          Fn::Sub: "${ExportPrefix}:DbSecurityGroupId"
       PubliclyAccessible: false
-
-      # Sizing / storage
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: !Ref AllocatedStorageGB
       StorageType: gp3
       StorageEncrypted: true
-
-      # Credentials
       MasterUsername: !Ref MasterUsername
       MasterUserPassword: !Ref MasterUserPassword
-
-      # Ops / durability
       BackupRetentionPeriod: !Ref BackupRetentionDays
       CopyTagsToSnapshot: true
       DeletionProtection: !Equals [!Ref DeletionProtection, "true"]
 
 Outputs:
-  DbInstanceArn:
-    Description: ARN of the RDS instance
-    Value: !GetAtt OrdersAppPostgresDb.DBInstanceArn
-
   DbEndpointAddress:
-    Description: RDS endpoint address
     Value: !GetAtt OrdersAppPostgresDb.Endpoint.Address
+    Export:
+      Name: !Sub "${ExportPrefix}:DbEndpointAddress"
 
   DbEndpointPort:
-    Description: RDS endpoint port
     Value: !GetAtt OrdersAppPostgresDb.Endpoint.Port
-
-  DbSubnetGroupName:
-    Description: DB subnet group used for Multi-AZ placement
-    Value: !Ref OrdersAppDbSubnetGroup
+    Export:
+      Name: !Sub "${ExportPrefix}:DbEndpointPort"
