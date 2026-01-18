@@ -9,7 +9,7 @@ Parameters:
 
   AmiId:
     Type: AWS::EC2::Image::Id
-    Description: AMI ID (recommended: Amazon Linux 2023)
+    Description: "AMI ID (recommended: Amazon Linux 2023)"
 
   InstanceType:
     Type: String
@@ -93,7 +93,7 @@ Resources:
               set -euo pipefail
 
               dnf -y update
-              dnf -y install java-21-amazon-corretto curl
+              dnf -y install java-21-amazon-corretto
 
               id -u ordersapp &>/dev/null || useradd --system --create-home --shell /sbin/nologin ordersapp
               mkdir -p /opt/orders-app
@@ -122,7 +122,7 @@ Resources:
               User=ordersapp
               WorkingDirectory=/opt/orders-app
               EnvironmentFile=/etc/orders-app.env
-              ExecStart=/usr/bin/java -jar /opt/orders-app/app.jar --server.port=$APP_PORT
+              ExecStart=/usr/bin/java -jar /opt/orders-app/app.jar
               Restart=always
               RestartSec=5
               SuccessExitStatus=143
@@ -173,14 +173,3 @@ Outputs:
   AutoScalingGroupName:
     Value: !Ref OrdersAppAutoScalingGroup
 
-  AlbUrl:
-    Description: Convenience output for browsing
-    Value: !Sub "http://${AlbDns}/"
-    Export:
-      Name: !Sub "${ExportPrefix}:AlbUrl"
-    Condition: AlwaysFalse
-
-Conditions:
-  # Exporting the ALB URL is optional; this condition keeps the output from exporting
-  # (since exports must be unique). You can remove the Export from AlbUrl or remove this entire block.
-  AlwaysFalse: !Equals ["true", "false"]

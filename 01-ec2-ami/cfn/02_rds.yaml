@@ -55,8 +55,11 @@ Parameters:
 
   DeletionProtection:
     Type: String
-    Default: "false"
+    Default: "true"
     AllowedValues: ["true", "false"]
+
+Conditions:
+  UseDeletionProtection: !Equals [!Ref DeletionProtection, "true"]
 
 Resources:
   OrdersAppDbSubnetGroup:
@@ -93,7 +96,7 @@ Resources:
       MasterUserPassword: !Ref MasterUserPassword
       BackupRetentionPeriod: !Ref BackupRetentionDays
       CopyTagsToSnapshot: true
-      DeletionProtection: !Equals [!Ref DeletionProtection, "true"]
+      DeletionProtection: !If [UseDeletionProtection, true, false]
 
 Outputs:
   DbEndpointAddress:
