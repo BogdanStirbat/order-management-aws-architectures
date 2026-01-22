@@ -21,14 +21,14 @@ export class ComputeStack extends Stack {
   constructor(scope: Construct, id: string, props: ComputeStackProps) {
     super(scope, id, props);
 
-    const { vpc, appSubnets, appSecurityGroup, targetGroup, database, config } = props;
+    const { appSubnets, appSecurityGroup, targetGroup, database, config } = props;
 
     const role = new iam.Role(this, "OrdersAppEc2Role", {
       roleName: `orders-app-ec2-ssm-role-${this.stackName}`,
       assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
-      ]
+        iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore"),
+      ],
     });
 
     // Allow instances to read the DB secret
@@ -38,7 +38,7 @@ export class ComputeStack extends Stack {
     role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["rds:DescribeDBInstances"],
-        resources: ["*"]
+        resources: ["*"],
       })
     );
 
@@ -51,19 +51,22 @@ export class ComputeStack extends Stack {
       // Java + tools for pulling secret
       "dnf -y install java-21-amazon-corretto jq awscli",
       "",
+      // Create service user + app dir
       "id -u ordersapp &>/dev/null || useradd --system --create-home --shell /sbin/nologin ordersapp",
       "mkdir -p /opt/orders-app",
       "chown -R ordersapp:ordersapp /opt/orders-app",
       "",
+      // Download the jar
       `curl -fL "${config.appJarUrl}" -o /opt/orders-app/app.jar`,
       "chown ordersapp:ordersapp /opt/orders-app/app.jar",
       "chmod 0644 /opt/orders-app/app.jar",
       "",
-      // Build JDBC from RDS endpoint at deploy-time
+      // Build JDBC components (RDS endpoint values are resolved at deploy-time by CDK)
       `DB_HOST="${database.db.dbInstanceEndpointAddress}"`,
       `DB_PORT="${database.db.dbInstanceEndpointPort}"`,
       `DB_NAME="${config.dbName}"`,
-      `JDBC_URL="jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}"`,
+      // IMPORTANT: escape $ so TypeScript doesn't try to interpolate; bash will expand at boot
+      `JDBC_URL="jdbc:postgresql://\\\${DB_HOST}:\\\${DB_PORT}/\\\${DB_NAME}"`,
       "",
       // Fetch username/password from Secrets Manager at boot
       `SECRET_ARN="${database.secret.secretArn}"`,
@@ -71,14 +74,19 @@ export class ComputeStack extends Stack {
       'DB_USER="$(echo "$SECRET_JSON" | jq -r .username)"',
       'DB_PASS="$(echo "$SECRET_JSON" | jq -r .password)"',
       "",
-      "cat >/etc/orders-app.env <<EOF",
-      "SPRING_DATASOURCE_URL=${JDBC_URL}",
-      "SPRING_DATASOURCE_USERNAME=${DB_USER}",
-      "SPRING_DATASOURCE_PASSWORD=${DB_PASS}",
-      `APP_PORT=${config.appPort}`,
-      "EOF",
+      // Fail fast if secret fields are missing (avoids confusing Spring errors)
+      'if [ -z "$DB_USER" ] || [ "$DB_USER" = "null" ]; then echo "DB_USER missing in secret JSON" >&2; exit 1; fi',
+      'if [ -z "$DB_PASS" ] || [ "$DB_PASS" = "null" ]; then echo "DB_PASS missing in secret JSON" >&2; exit 1; fi',
+      "",
+      // Write env file WITHOUT relying on heredoc expansion (robust)
+      `APP_PORT="${config.appPort}"`,
+      'printf "SPRING_DATASOURCE_URL=%s\\n" "$JDBC_URL" > /etc/orders-app.env',
+      'printf "SPRING_DATASOURCE_USERNAME=%s\\n" "$DB_USER" >> /etc/orders-app.env',
+      'printf "SPRING_DATASOURCE_PASSWORD=%s\\n" "$DB_PASS" >> /etc/orders-app.env',
+      'printf "APP_PORT=%s\\n" "$APP_PORT" >> /etc/orders-app.env',
       "chmod 0600 /etc/orders-app.env",
       "",
+      // systemd unit (quoted heredoc is correct here; we *don't* want expansion inside the unit file)
       "cat >/etc/systemd/system/orders-app.service <<'EOF'",
       "[Unit]",
       "Description=Orders App (Spring Boot)",
@@ -104,30 +112,38 @@ export class ComputeStack extends Stack {
     );
 
     const machineImage = ec2.MachineImage.genericLinux({
-      [Stack.of(this).region]: config.amiId
+      [Stack.of(this).region]: config.amiId,
     });
 
     const instanceType = new ec2.InstanceType(config.instanceType);
 
-    const asg = new autoscaling.AutoScalingGroup(this, "OrdersAsg", {
-      vpc,
-      vpcSubnets: { subnets: appSubnets },
-      minCapacity: config.minSize,
-      maxCapacity: config.maxSize,
-      desiredCapacity: config.desiredCapacity,
-      instanceType,
+    const launchTemplate = new ec2.LaunchTemplate(this, "OrdersLaunchTemplate", {
       machineImage,
+      instanceType,
       securityGroup: appSecurityGroup,
       role,
       userData,
-      healthCheck: autoscaling.HealthCheck.elb({
-        grace: Duration.seconds(300)
-      })
     });
 
-    // Register with the ALB target group
-    targetGroup.addTarget(asg);
+    const asg = new autoscaling.CfnAutoScalingGroup(this, "OrdersAsg", {
+      vpcZoneIdentifier: appSubnets.map((s) => s.subnetId),
+      minSize: String(config.minSize),
+      maxSize: String(config.maxSize),
+      desiredCapacity: String(config.desiredCapacity),
 
-    new cdk.CfnOutput(this, "AutoScalingGroupName", { value: asg.autoScalingGroupName });
+      // Force Launch Template usage (no LaunchConfiguration will be created)
+      launchTemplate: {
+        launchTemplateId: launchTemplate.launchTemplateId,
+        version: launchTemplate.latestVersionNumber,
+      },
+
+      // Register instances to the ALB target group
+      targetGroupArns: [targetGroup.targetGroupArn],
+
+      healthCheckType: "ELB",
+      healthCheckGracePeriod: 300,
+    });
+
+    new cdk.CfnOutput(this, "AutoScalingGroupName", { value: asg.ref });
   }
 }

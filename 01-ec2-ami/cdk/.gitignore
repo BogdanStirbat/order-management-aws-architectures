@@ -3,3 +3,5 @@ dist/
 cdk.out/
 *.log
 .DS_Store
+cdk.context.json
+

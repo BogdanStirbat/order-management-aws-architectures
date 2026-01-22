@@ -1,5 +1,8 @@
 import * as cdk from "aws-cdk-lib";
 
+const ALLOWED_DB_ENGINE_VERSIONS = ["16.9", "16.8", "17.6", "17.7"] as const;
+type DbEngineVersion = typeof ALLOWED_DB_ENGINE_VERSIONS[number];
+
 export type OrdersAppConfig = {
   appJarUrl: string;
   amiId: string;
@@ -51,6 +54,30 @@ function optionalBool(app: cdk.App, key: string, def: boolean): boolean {
   throw new Error(`Context ${key} must be a boolean (true/false)`);
 }
 
+function optionalDbEngineVersion(
+  app: cdk.App,
+  key: string,
+  def: DbEngineVersion
+): DbEngineVersion {
+  const v = app.node.tryGetContext(key);
+
+  if (v === undefined || v === null) {
+    return def;
+  }
+
+  if (typeof v !== "string") {
+    throw new Error(`Context ${key} must be a string`);
+  }
+
+  if (!ALLOWED_DB_ENGINE_VERSIONS.includes(v as DbEngineVersion)) {
+    throw new Error(
+      `Invalid ${key}: "${v}". Allowed values: ${ALLOWED_DB_ENGINE_VERSIONS.join(", ")}`
+    );
+  }
+
+  return v as DbEngineVersion;
+}
+
 export function loadConfig(app: cdk.App): OrdersAppConfig {
   return {
     appJarUrl: requiredString(app, "appJarUrl"),
@@ -65,7 +92,7 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
     healthCheckPath: optionalString(app, "healthCheckPath", "/actuator/health/readiness"),
 
     dbName: optionalString(app, "dbName", "ordersdb"),
-    dbEngineVersion: optionalString(app, "dbEngineVersion", "16.9"),
+    dbEngineVersion: optionalDbEngineVersion(app, "dbEngineVersion", "16.9"),
     dbInstanceClass: optionalString(app, "dbInstanceClass", "t4g.micro"),
     dbAllocatedStorageGb: optionalNumber(app, "dbAllocatedStorageGb", 20),
     dbBackupRetentionDays: optionalNumber(app, "dbBackupRetentionDays", 7),
