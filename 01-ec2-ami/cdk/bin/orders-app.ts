@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import * as cdk from "aws-cdk-lib";
 import { NetworkStack } from "../lib/network-stack";
+import { AmiBuilderStack } from "../lib/ami-builder-stack";
 import { DatabaseStack } from "../lib/database-stack";
 import { AlbStack } from "../lib/alb-stack";
 import { ComputeStack } from "../lib/compute-stack";
@@ -15,6 +16,14 @@ const env = {
 };
 
 const network = new NetworkStack(app, "OrdersApp-Network", { env });
+
+const jarKey = app.node.tryGetContext("jarKey") ?? "releases/1.0.0/app.jar";
+const amiBuilder = new AmiBuilderStack(app, "OrdersApp-AmiBuilder", {
+  env,
+  vpc: network.vpc,
+  buildSubnet: network.publicSubnets[0],
+  jarKey,
+});
 
 const database = new DatabaseStack(app, "OrdersApp-Database", {
   env,

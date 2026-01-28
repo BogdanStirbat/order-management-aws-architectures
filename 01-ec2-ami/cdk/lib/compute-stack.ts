@@ -2,6 +2,7 @@ import * as cdk from "aws-cdk-lib";
 import { Stack, StackProps, Duration } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
+import * as ssm from "aws-cdk-lib/aws-ssm";
 import * as autoscaling from "aws-cdk-lib/aws-autoscaling";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
@@ -56,11 +57,6 @@ export class ComputeStack extends Stack {
       "mkdir -p /opt/orders-app",
       "chown -R ordersapp:ordersapp /opt/orders-app",
       "",
-      // Download the jar
-      `curl -fL "${config.appJarUrl}" -o /opt/orders-app/app.jar`,
-      "chown ordersapp:ordersapp /opt/orders-app/app.jar",
-      "chmod 0644 /opt/orders-app/app.jar",
-      "",
       // Build JDBC components (RDS endpoint values are resolved at deploy-time by CDK)
       `DB_HOST="${database.db.dbInstanceEndpointAddress}"`,
       `DB_PORT="${database.db.dbInstanceEndpointPort}"`,
@@ -107,12 +103,13 @@ export class ComputeStack extends Stack {
       "WantedBy=multi-user.target",
       "EOF",
       "",
-      "systemctl daemon-reload",
-      "systemctl enable --now orders-app.service"
+      "systemctl restart orders-app.service"
     );
 
+    const amiId = ssm.StringParameter.valueForStringParameter(this, "/orders-app/ami/latest");
+
     const machineImage = ec2.MachineImage.genericLinux({
-      [Stack.of(this).region]: config.amiId,
+      [cdk.Stack.of(this).region]: amiId,
     });
 
     const instanceType = new ec2.InstanceType(config.instanceType);
@@ -142,6 +139,19 @@ export class ComputeStack extends Stack {
 
       healthCheckType: "ELB",
       healthCheckGracePeriod: 300,
+    });
+
+    // Rolling replacement of instances whenever the Launch Template changes
+    // Configure Instance Refresh (CloudFormation override)
+    // NOTE: property names are CloudFormation-case sensitive
+    asg.addPropertyOverride("InstanceRefresh", {
+      Strategy: "Rolling",
+      Triggers: ["LaunchTemplate"],
+      Preferences: {
+        MinHealthyPercentage: 90,
+        InstanceWarmup: 300,
+        SkipMatching: true,
+      },
     });
 
     new cdk.CfnOutput(this, "AutoScalingGroupName", { value: asg.ref });

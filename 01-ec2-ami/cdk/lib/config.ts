@@ -4,8 +4,6 @@ const ALLOWED_DB_ENGINE_VERSIONS = ["16.9", "16.8", "17.6", "17.7"] as const;
 type DbEngineVersion = typeof ALLOWED_DB_ENGINE_VERSIONS[number];
 
 export type OrdersAppConfig = {
-  appJarUrl: string;
-  amiId: string;
 
   instanceType: string;
   desiredCapacity: number;
@@ -80,8 +78,6 @@ function optionalDbEngineVersion(
 
 export function loadConfig(app: cdk.App): OrdersAppConfig {
   return {
-    appJarUrl: requiredString(app, "appJarUrl"),
-    amiId: requiredString(app, "amiId"),
 
     instanceType: optionalString(app, "instanceType", "t3.micro"),
     desiredCapacity: optionalNumber(app, "desiredCapacity", 2),
