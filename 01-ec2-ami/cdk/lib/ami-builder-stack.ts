@@ -12,6 +12,12 @@ export interface AmiBuilderStackProps extends StackProps {
   jarKey: string;             // e.g. "releases/1.0.0/app.jar"
 }
 
+function safeIdFromJarKey(jarKey: string): string {
+  // keep it readable and safe for AWS “name” fields
+  // releases/1.2.1/app.jar -> releases-1.2.1-app-jar
+  return jarKey.replace(/[^a-zA-Z0-9._-]/g, "-");
+}
+
 export class AmiBuilderStack extends Stack {
   public readonly bucket: s3.Bucket;
   public readonly pipelineArn: string;
@@ -21,7 +27,8 @@ export class AmiBuilderStack extends Stack {
 
     const { vpc, buildSubnet, jarKey } = props;
 
-    const latestAmiParam = "/orders-app/ami/latest";
+    const jarKeyId = safeIdFromJarKey(jarKey);
+    const amiParamName = `/orders-app/ami/${jarKey}`;
 
     // Private artifact bucket for your jar
     this.bucket = new s3.Bucket(this, "OrdersArtifacts", {
@@ -44,7 +51,7 @@ export class AmiBuilderStack extends Stack {
     const paramArn = cdk.Stack.of(this).formatArn({
       service: "ssm",
       resource: "parameter",
-      resourceName: latestAmiParam.replace(/^\//, ""),
+      resourceName: amiParamName.replace(/^\//, ""),
     });
 
     buildRole.addToPolicy(new iam.PolicyStatement({
@@ -127,7 +134,7 @@ export class AmiBuilderStack extends Stack {
     ].join("\n");
 
     const component = new imagebuilder.CfnComponent(this, "OrdersAppComponent", {
-      name: `orders-app-bake-${this.stackName}`,
+      name: `orders-app-bake-${jarKeyId}`,
       platform: "Linux",
       version: "1.0.0",
       data: componentYaml,
@@ -138,7 +145,7 @@ export class AmiBuilderStack extends Stack {
     const parentImage = "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}";
 
     const recipe = new imagebuilder.CfnImageRecipe(this, "OrdersAppRecipe", {
-      name: `orders-app-recipe-${this.stackName}`,
+      name: `orders-app-recipe-${jarKeyId}`,
       version: "1.0.0",
       parentImage,
       components: [{ componentArn: component.attrArn }],
@@ -156,7 +163,7 @@ export class AmiBuilderStack extends Stack {
     });
 
     const infra = new imagebuilder.CfnInfrastructureConfiguration(this, "OrdersAppInfra", {
-      name: `orders-app-infra-${this.stackName}`,
+      name: `orders-app-infra-${jarKeyId}`,
       instanceProfileName: instanceProfile.ref,
       instanceTypes: ["t3.micro"],
       subnetId: buildSubnet.subnetId,
@@ -165,7 +172,7 @@ export class AmiBuilderStack extends Stack {
     });
 
     const dist = new imagebuilder.CfnDistributionConfiguration(this, "OrdersAppDist", {
-      name: `orders-app-dist-${this.stackName}`,
+      name: `orders-app-dist-${jarKeyId}`,
       distributions: [
         {
           region: cdk.Stack.of(this).region,
@@ -179,7 +186,7 @@ export class AmiBuilderStack extends Stack {
           },
           ssmParameterConfigurations:[
             {
-              parameterName: latestAmiParam,
+              parameterName: amiParamName,
               dataType: "aws:ec2:image",
             }
           ]
@@ -188,7 +195,7 @@ export class AmiBuilderStack extends Stack {
     });
 
     const pipeline = new imagebuilder.CfnImagePipeline(this, "OrdersAppPipeline", {
-      name: `orders-app-pipeline-${this.stackName}`,
+      name: `orders-app-pipeline-${jarKeyId}`,
       imageRecipeArn: recipe.attrArn,
       infrastructureConfigurationArn: infra.attrArn,
       distributionConfigurationArn: dist.attrArn,
@@ -199,6 +206,7 @@ export class AmiBuilderStack extends Stack {
 
     new CfnOutput(this, "ArtifactsBucketName", { value: this.bucket.bucketName });
     new CfnOutput(this, "JarKey", { value: jarKey });
+    new CfnOutput(this, "AmiSsmParameterName", { value: amiParamName });
     new CfnOutput(this, "ImagePipelineArn", { value: this.pipelineArn });
   }
 }

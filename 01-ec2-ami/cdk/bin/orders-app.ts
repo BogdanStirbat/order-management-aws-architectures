@@ -18,6 +18,7 @@ const env = {
 const network = new NetworkStack(app, "OrdersApp-Network", { env });
 
 const jarKey = app.node.tryGetContext("jarKey") ?? "releases/1.0.0/app.jar";
+const amiParamName = `/orders-app/ami/${jarKey}`;
 const amiBuilder = new AmiBuilderStack(app, "OrdersApp-AmiBuilder", {
   env,
   vpc: network.vpc,
@@ -48,5 +49,6 @@ new ComputeStack(app, "OrdersApp-Compute", {
   appSecurityGroup: network.appSecurityGroup,
   targetGroup: alb.targetGroup,
   database,
-  config
+  config,
+  amiSsmParamName: amiParamName
 });

@@ -47,42 +47,26 @@ cdk deploy \
 
 ## How to run the service 
 
-Step 1. Build the jar.
-```
-cd app/ec2ami
-mvn clean install
-```
+### First deploy
 
-Step 2. Deploy the Image Builder stack.
-```
-cd ../cdk
-cdk deploy OrdersApp-AmiBuilder -c jarKey=releases/1.0.0/app.jar
-```
-
-This will output the artifact's bucket name (e.g. `ArtifactsBucketName`).
-
-Step 3. 
-
-Upload the jar to the private bucket.
-```
-aws s3 cp app/ec2ami/target/*.jar s3://<ArtifactsBucketName>/releases/1.0.0/app.jar
-```
-
-Step 4.
-Trigger an AMI build. This can be triggered from the console, or CLI:
-```
-aws imagebuilder start-image-pipeline-execution --image-pipeline-arn <ImagePipelineArn>
-```
-
-After the pipeline will finish, a new AMI will be visible in EC2. 
-Image Builder produces a new AMI and updates `/orders-app/ami/latest`
+1. Build the jar 
+2. Choose a jarKey, e.g. `jarKey=releases/1.0.0/app.jar` (following instructions will asume `jarKey=releases/1.0.0/app.jar`, change accordingly if other jarKey is choosen)
+3. Deploy infra: `cdk deploy OrdersApp-Network OrdersApp-Database OrdersApp-Alb OrdersApp-AmiBuilder -c jarKey=releases/1.0.0/app.jar`
+4. Upload the jar file to the S3 bucket (created by the infra) at `releases/1.0.0/app.jar`
+5. Trigger the Image Builder pipeline execution (console/CLI)
+6. Deploy Compute: `cdk deploy OrdersApp-Compute -c jarKey=releases/1.0.0/app.jar`
 
 
-Step 5. Deploy the app; the lastest AMI from `/orders-app/ami/latest` wil be used. 
-```
-cd app/cdk
-cdk deploy
-```
+### Future deploys
+
+1. Build the jar 
+2. Choose a jarKey, e.g. `jarKey=releases/1.2.01/app.jar` (following instructions will asume `jarKey=releases/1.2.1/app.jar`, change accordingly if other jarKey is choosen)
+3. Upload jar to S3, at `releases/1.2.01/app.jar`
+4. Adjust the AMI builder job: `cdk deploy OrdersApp-AmiBuilder -c jarKey=releases/1.2.1/app.jar`
+5. Trigger the Image Builder pipeline execution (console/CLI)
+6. Run the deployment: `cdk deploy OrdersApp-Compute -c jarKey=releases/1.2.1/app.jar`
+
+Note. If the current deployment is actually a rollback and the ami id already exists, then step 6 is enough.
 
 
 ---
