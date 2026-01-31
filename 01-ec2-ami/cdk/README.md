@@ -53,20 +53,41 @@ cdk deploy \
 2. Choose a jarKey, e.g. `jarKey=releases/1.0.0/app.jar` (following instructions will asume `jarKey=releases/1.0.0/app.jar`, change accordingly if other jarKey is choosen)
 3. Deploy infra: `cdk deploy OrdersApp-Network OrdersApp-Database OrdersApp-Alb OrdersApp-AmiBuilder -c jarKey=releases/1.0.0/app.jar`
 4. Upload the jar file to the S3 bucket (created by the infra) at `releases/1.0.0/app.jar`
-5. Trigger the Image Builder pipeline execution (console/CLI)
-6. Deploy Compute: `cdk deploy OrdersApp-Compute -c jarKey=releases/1.0.0/app.jar`
+5. Update the `/orders-app/build/jarKey` SSM parameter:
+
+```
+aws ssm put-parameter \
+  --name /orders-app/build/jarKey \
+  --type String \
+  --value "releases/1.0.0/app.jar" \
+  --overwrite
+```
+
+6. Trigger the Image Builder pipeline execution (console/CLI). Wait for the pipeline execution to complete successfully.
+7. Copy the latest ami to the per release ami: `./scripts/publish_ami_for_jarkey.sh "releases/1.0.0/app.jar"`
+8. Deploy Compute: `cdk deploy OrdersApp-Compute -c jarKey=releases/1.0.0/app.jar`
 
 
 ### Future deploys
 
 1. Build the jar 
-2. Choose a jarKey, e.g. `jarKey=releases/1.2.01/app.jar` (following instructions will asume `jarKey=releases/1.2.1/app.jar`, change accordingly if other jarKey is choosen)
-3. Upload jar to S3, at `releases/1.2.01/app.jar`
-4. Adjust the AMI builder job: `cdk deploy OrdersApp-AmiBuilder -c jarKey=releases/1.2.1/app.jar`
-5. Trigger the Image Builder pipeline execution (console/CLI)
-6. Run the deployment: `cdk deploy OrdersApp-Compute -c jarKey=releases/1.2.1/app.jar`
+2. Choose a jarKey, e.g. `jarKey=releases/1.2.1/app.jar` (following instructions will asume `jarKey=releases/1.2.1/app.jar`, change accordingly if other jarKey is choosen)
+3. Upload jar to S3, at `releases/1.2.1/app.jar`
+4. Update the `/orders-app/build/jarKey` SSM parameter:
 
-Note. If the current deployment is actually a rollback and the ami id already exists, then step 6 is enough.
+```
+aws ssm put-parameter \
+  --name /orders-app/build/jarKey \
+  --type String \
+  --value "releases/1.2.1/app.jar" \
+  --overwrite
+```
+
+5. Trigger the Image Builder pipeline execution (console/CLI). Wait for the pipeline execution to complete successfully.
+6. Copy the latest ami to the per release ami: `./scripts/publish_ami_for_jarkey.sh "releases/1.2.1/app.jar"`
+7. Run the deployment: `cdk deploy OrdersApp-Compute -c jarKey=releases/1.2.1/app.jar`
+
+Note. If the current deployment is actually a rollback and the ami id already exists, then step 7 is enough.
 
 
 ---

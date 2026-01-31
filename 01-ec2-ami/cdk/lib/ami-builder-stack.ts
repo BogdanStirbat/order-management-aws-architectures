@@ -4,33 +4,42 @@ import { Construct } from "constructs";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as ssm from "aws-cdk-lib/aws-ssm";
 import * as imagebuilder from "aws-cdk-lib/aws-imagebuilder";
 
 export interface AmiBuilderStackProps extends StackProps {
   vpc: ec2.IVpc;
-  buildSubnet: ec2.ISubnet;   // simplest: a public subnet
-  jarKey: string;             // e.g. "releases/1.0.0/app.jar"
+  buildSubnet: ec2.ISubnet; // simplest: a public subnet
 }
 
-function safeIdFromJarKey(jarKey: string): string {
-  // keep it readable and safe for AWS “name” fields
-  // releases/1.2.1/app.jar -> releases-1.2.1-app-jar
-  return jarKey.replace(/[^a-zA-Z0-9._-]/g, "-");
-}
-
+/**
+ * When you do a release, you decide a release e.g. 1.2.3 and deploy to s3
+ * a jar file named "releases/x.y.z/app.jar". 
+ * Next, the SSM pointer parameter name /orders-app/build/jarKey will get the value 
+ * releases/x.y.z/app.jar .
+ * - Image Builder component reads that parameter and downloads the jar
+ * - Distribution writes resulting AMI ID to /orders-app/ami/latest
+ *
+ * If you want /orders-app/ami/<jarKey> for deployments/rollbacks,
+ * do a small post-step (CLI/Lambda) to copy /orders-app/ami/latest into
+ * /orders-app/ami/<jarKey>.
+ */
 export class AmiBuilderStack extends Stack {
   public readonly bucket: s3.Bucket;
   public readonly pipelineArn: string;
 
+  // Expose these as outputs so the release scripts can use them
+  public readonly jarKeyPointerParamName: string = "/orders-app/build/jarKey";
+  public readonly latestAmiParamName: string = "/orders-app/ami/latest";
+
   constructor(scope: Construct, id: string, props: AmiBuilderStackProps) {
     super(scope, id, props);
 
-    const { vpc, buildSubnet, jarKey } = props;
+    const { vpc, buildSubnet } = props;
 
-    const jarKeyId = safeIdFromJarKey(jarKey);
-    const amiParamName = `/orders-app/ami/${jarKey}`;
-
-    // Private artifact bucket for your jar
+    //
+    // Artifacts bucket (jar lives here under an immutable key like releases/1.2.1/app.jar)
+    //
     this.bucket = new s3.Bucket(this, "OrdersArtifacts", {
       bucketName: `${cdk.Stack.of(this).stackName.toLowerCase()}-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -40,7 +49,20 @@ export class AmiBuilderStack extends Stack {
       enforceSSL: true,
     });
 
+    //
+    // SSM parameter that points to the jarKey to bake next.
+    // As part of the release process, this SSM parameter will be updated, per release, 
+    // before starting the pipeline execution.
+    const jarKeyPointer = new ssm.StringParameter(this, "OrdersAppBuildJarKeyPointer", {
+      parameterName: this.jarKeyPointerParamName,
+      stringValue: "releases/0.0.0/app.jar", // placeholder; will be updated before each pipeline execution
+      description: "S3 key of the Orders app jar to bake into the next AMI (e.g., releases/1.2.1/app.jar)",
+      tier: ssm.ParameterTier.STANDARD,
+    });
+
+    //
     // Role used by the ephemeral Image Builder build instance
+    //
     const buildRole = new iam.Role(this, "ImageBuilderInstanceRole", {
       assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
     });
@@ -48,39 +70,57 @@ export class AmiBuilderStack extends Stack {
       iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
     );
 
-    const paramArn = cdk.Stack.of(this).formatArn({
+    // Allow the build instance to read the jarKey pointer parameter
+    jarKeyPointer.grantRead(buildRole);
+
+    // Allow the build instance to read jars from the artifacts bucket (any key).
+    this.bucket.grantRead(buildRole);
+
+    // Allow Image Builder to write the resulting AMI ID to /orders-app/ami/latest
+    const latestAmiParamArn = cdk.Stack.of(this).formatArn({
       service: "ssm",
       resource: "parameter",
-      resourceName: amiParamName.replace(/^\//, ""),
+      resourceName: this.latestAmiParamName.replace(/^\//, ""),
     });
+    buildRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["ssm:PutParameter"],
+        resources: [latestAmiParamArn],
+      })
+    );
 
-    buildRole.addToPolicy(new iam.PolicyStatement({
-      actions: ["ssm:PutParameter"],
-      resources: [paramArn],
-    }));
-
-    buildRole.addToPolicy(new iam.PolicyStatement({
-      actions: ["ec2:DescribeImages"],
-      resources: ["*"],
-    }));
-
-    // Allow the build instance to download the jar from S3
-    this.bucket.grantRead(buildRole, jarKey);
+    // Not strictly required, but harmless for diagnostics
+    buildRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ["ec2:DescribeImages"],
+        resources: ["*"],
+      })
+    );
 
     const instanceProfile = new iam.CfnInstanceProfile(this, "ImageBuilderInstanceProfile", {
       roles: [buildRole.roleName],
     });
 
+    //
+    // Security group for the build instance (outbound needed to reach S3/SSM via IGW/NAT)
+    //
     const buildSg = new ec2.SecurityGroup(this, "ImageBuilderBuildSg", {
       vpc,
       allowAllOutbound: true,
       description: "SG for EC2 Image Builder build instance",
     });
 
-    // Component: install Java, create user/dirs, download jar, install systemd unit
+    //
+    // Component: install Java, create user/dirs, read jarKey from SSM, download jar, install systemd unit
+    //
+    // NOTE: Image Builder supports variable substitution from SSM Parameter Store in the form:
+    //   {{ aws:ssm:/path/to/param }}
+    //
+    // We use that to fetch the jarKey at build time.
+    //
     const componentYaml = [
       "name: OrdersAppBake",
-      "description: Bake Orders Spring Boot app into AMI",
+      "description: Bake Orders Spring Boot app into AMI (jarKey from SSM pointer)",
       "schemaVersion: 1.0",
       "phases:",
       "  - name: build",
@@ -102,7 +142,12 @@ export class AmiBuilderStack extends Stack {
       "        action: ExecuteBash",
       "        inputs:",
       "          commands:",
-      `            - aws s3 cp s3://${this.bucket.bucketName}/${jarKey} /opt/orders-app/app.jar`,
+      "            - set -euo pipefail",
+      `            - BUCKET="${this.bucket.bucketName}"`,
+      `            - JAR_KEY="{{ aws:ssm:${this.jarKeyPointerParamName} }}"`,
+      `            - if [ -z "$JAR_KEY" ] || [ "$JAR_KEY" = "null" ]; then echo "ERROR: jarKey pointer is empty (${this.jarKeyPointerParamName})" >&2; exit 1; fi`,
+      `            - echo "Baking jar from s3://$BUCKET/$JAR_KEY"`,
+      `            - aws s3 cp "s3://$BUCKET/$JAR_KEY" /opt/orders-app/app.jar`,
       "            - chown ordersapp:ordersapp /opt/orders-app/app.jar",
       "            - chmod 0644 /opt/orders-app/app.jar",
       "      - name: InstallSystemdUnit",
@@ -134,18 +179,22 @@ export class AmiBuilderStack extends Stack {
     ].join("\n");
 
     const component = new imagebuilder.CfnComponent(this, "OrdersAppComponent", {
-      name: `orders-app-bake-${jarKeyId}`,
+      name: `orders-app-bake-${this.stackName.toLowerCase()}`,
       platform: "Linux",
       version: "1.0.0",
       data: componentYaml,
+      tags: {
+        App: "orders-app",
+        ManagedBy: "cdk",
+      },
     });
 
     // Use an always-up-to-date AL2023 AMI id via SSM dynamic reference
-    // (x86_64 because your app instances are t3.micro by default)
-    const parentImage = "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}";
+    const parentImage =
+      "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}";
 
     const recipe = new imagebuilder.CfnImageRecipe(this, "OrdersAppRecipe", {
-      name: `orders-app-recipe-${jarKeyId}`,
+      name: `orders-app-recipe-${this.stackName.toLowerCase()}`,
       version: "1.0.0",
       parentImage,
       components: [{ componentArn: component.attrArn }],
@@ -160,19 +209,27 @@ export class AmiBuilderStack extends Stack {
           },
         },
       ],
+      tags: {
+        App: "orders-app",
+        ManagedBy: "cdk",
+      },
     });
 
     const infra = new imagebuilder.CfnInfrastructureConfiguration(this, "OrdersAppInfra", {
-      name: `orders-app-infra-${jarKeyId}`,
+      name: `orders-app-infra-${this.stackName.toLowerCase()}`,
       instanceProfileName: instanceProfile.ref,
       instanceTypes: ["t3.micro"],
       subnetId: buildSubnet.subnetId,
       securityGroupIds: [buildSg.securityGroupId],
       terminateInstanceOnFailure: true,
+      tags: {
+        App: "orders-app",
+        ManagedBy: "cdk",
+      },
     });
 
     const dist = new imagebuilder.CfnDistributionConfiguration(this, "OrdersAppDist", {
-      name: `orders-app-dist-${jarKeyId}`,
+      name: `orders-app-dist-${this.stackName.toLowerCase()}`,
       distributions: [
         {
           region: cdk.Stack.of(this).region,
@@ -182,31 +239,41 @@ export class AmiBuilderStack extends Stack {
             amiTags: {
               App: "orders-app",
               ManagedBy: "imagebuilder",
+              // Note: JarKey tagging is best done by your release automation
+              // (e.g. tag the Image/AMI after build, or use start-execution tags)
             },
           },
-          ssmParameterConfigurations:[
+          ssmParameterConfigurations: [
             {
-              parameterName: amiParamName,
+              parameterName: this.latestAmiParamName,
               dataType: "aws:ec2:image",
-            }
-          ]
+            },
+          ],
         },
       ],
+      tags: {
+        App: "orders-app",
+        ManagedBy: "cdk",
+      },
     });
 
     const pipeline = new imagebuilder.CfnImagePipeline(this, "OrdersAppPipeline", {
-      name: `orders-app-pipeline-${jarKeyId}`,
+      name: `orders-app-pipeline-${this.stackName.toLowerCase()}`,
       imageRecipeArn: recipe.attrArn,
       infrastructureConfigurationArn: infra.attrArn,
       distributionConfigurationArn: dist.attrArn,
       status: "ENABLED",
+      tags: {
+        App: "orders-app",
+        ManagedBy: "cdk",
+      },
     });
 
     this.pipelineArn = pipeline.attrArn;
 
     new CfnOutput(this, "ArtifactsBucketName", { value: this.bucket.bucketName });
-    new CfnOutput(this, "JarKey", { value: jarKey });
-    new CfnOutput(this, "AmiSsmParameterName", { value: amiParamName });
+    new CfnOutput(this, "BuildJarKeyPointerParam", { value: this.jarKeyPointerParamName });
+    new CfnOutput(this, "LatestAmiParamName", { value: this.latestAmiParamName });
     new CfnOutput(this, "ImagePipelineArn", { value: this.pipelineArn });
   }
 }

@@ -16,7 +16,7 @@ export interface ComputeStackProps extends StackProps {
   targetGroup: elbv2.IApplicationTargetGroup;
   database: DatabaseStack;
   config: OrdersAppConfig;
-  amiSsmParamName: string;
+  jarKey: string;
 }
 
 export class ComputeStack extends Stack {
@@ -107,7 +107,9 @@ export class ComputeStack extends Stack {
       "systemctl restart orders-app.service"
     );
 
-    const amiId = ssm.StringParameter.valueForStringParameter(this, props.amiSsmParamName);
+    const amiParamName = `/orders-app/ami/${props.jarKey}`;
+
+    const amiId = ssm.StringParameter.valueForStringParameter(this, amiParamName);
 
     const machineImage = ec2.MachineImage.genericLinux({
       [cdk.Stack.of(this).region]: amiId,

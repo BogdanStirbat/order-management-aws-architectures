@@ -17,13 +17,10 @@ const env = {
 
 const network = new NetworkStack(app, "OrdersApp-Network", { env });
 
-const jarKey = app.node.tryGetContext("jarKey") ?? "releases/1.0.0/app.jar";
-const amiParamName = `/orders-app/ami/${jarKey}`;
 const amiBuilder = new AmiBuilderStack(app, "OrdersApp-AmiBuilder", {
   env,
   vpc: network.vpc,
   buildSubnet: network.publicSubnets[0],
-  jarKey,
 });
 
 const database = new DatabaseStack(app, "OrdersApp-Database", {
@@ -50,5 +47,5 @@ new ComputeStack(app, "OrdersApp-Compute", {
   targetGroup: alb.targetGroup,
   database,
   config,
-  amiSsmParamName: amiParamName
+  jarKey: config.jarKey
 });
