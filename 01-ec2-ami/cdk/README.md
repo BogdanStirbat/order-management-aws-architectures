@@ -51,7 +51,7 @@ cdk deploy \
 
 1. Build the jar 
 2. Choose a jarKey, e.g. `jarKey=releases/1.0.0/app.jar` (following instructions will asume `jarKey=releases/1.0.0/app.jar`, change accordingly if other jarKey is choosen)
-3. Deploy infra: `cdk deploy OrdersApp-Network OrdersApp-Database OrdersApp-Alb OrdersApp-AmiBuilder -c jarKey=releases/1.0.0/app.jar`
+3. Deploy infra: `cdk deploy OrdersApp-Network OrdersApp-Database OrdersApp-Alb OrdersApp-AmiBuilder OrdersApp-Monitoring -c jarKey=releases/1.0.0/app.jar` (optionally, you can add a parameter: -c alarmEmail=alarms@youremail.com; the alarm email will get monitoring notifications about the application)
 4. Upload the jar file to the S3 bucket (created by the infra) at `releases/1.0.0/app.jar`
 5. Update the `/orders-app/build/jarKey` SSM parameter:
 

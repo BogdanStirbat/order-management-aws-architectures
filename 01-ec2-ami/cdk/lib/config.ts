@@ -20,6 +20,8 @@ export type OrdersAppConfig = {
   dbAllocatedStorageGb: number;
   dbBackupRetentionDays: number;
   dbDeletionProtection: boolean;
+
+  alarmEmail?: string;
 };
 
 function requiredString(app: cdk.App, key: string): string {
@@ -34,6 +36,12 @@ function optionalString(app: cdk.App, key: string, def: string): string {
   const v = app.node.tryGetContext(key);
   if (v === undefined || v === null) return def;
   if (typeof v !== "string") throw new Error(`Context ${key} must be a string`);
+  return v;
+}
+
+function optionalStringOrUndefined(app: cdk.App, key: string): string | undefined {
+  const v = app.node.tryGetContext(key);
+  if (v === undefined || v === null || typeof v !== "string") return undefined;
   return v;
 }
 
@@ -94,6 +102,8 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
     dbInstanceClass: optionalString(app, "dbInstanceClass", "t4g.micro"),
     dbAllocatedStorageGb: optionalNumber(app, "dbAllocatedStorageGb", 20),
     dbBackupRetentionDays: optionalNumber(app, "dbBackupRetentionDays", 7),
-    dbDeletionProtection: optionalBool(app, "dbDeletionProtection", true)
+    dbDeletionProtection: optionalBool(app, "dbDeletionProtection", true),
+
+    alarmEmail: optionalStringOrUndefined(app, "alarmEmail")
   };
 }

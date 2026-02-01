@@ -4,6 +4,7 @@ import { NetworkStack } from "../lib/network-stack";
 import { AmiBuilderStack } from "../lib/ami-builder-stack";
 import { DatabaseStack } from "../lib/database-stack";
 import { AlbStack } from "../lib/alb-stack";
+import { MonitoringStack } from "../lib/monitoring-stack";
 import { ComputeStack } from "../lib/compute-stack";
 import { loadConfig } from "../lib/config";
 
@@ -37,6 +38,13 @@ const alb = new AlbStack(app, "OrdersApp-Alb", {
   publicSubnets: network.publicSubnets,
   albSecurityGroup: network.albSecurityGroup,
   config
+});
+
+new MonitoringStack(app, "OrdersApp-Monitoring", {
+  env,
+  targetGroup: alb.targetGroup,
+  db: database.db,
+  alarmEmail: config.alarmEmail,
 });
 
 new ComputeStack(app, "OrdersApp-Compute", {
