@@ -7,7 +7,7 @@ import type { OrdersAppConfig } from "./config";
 
 export interface AlbStackProps extends StackProps {
   vpc: ec2.IVpc;
-  publicSubnets: ec2.ISubnet[];
+  appSubnets: ec2.ISubnet[];
   albSecurityGroup: ec2.ISecurityGroup;
   config: OrdersAppConfig;
 }
@@ -15,17 +15,18 @@ export interface AlbStackProps extends StackProps {
 export class AlbStack extends Stack {
   public readonly alb: elbv2.ApplicationLoadBalancer;
   public readonly targetGroup: elbv2.ApplicationTargetGroup;
+  public readonly httpListener: elbv2.ApplicationListener;
 
   constructor(scope: Construct, id: string, props: AlbStackProps) {
     super(scope, id, props);
 
-    const { vpc, publicSubnets, albSecurityGroup, config } = props;
+    const { vpc, appSubnets, albSecurityGroup, config } = props;
 
     this.alb = new elbv2.ApplicationLoadBalancer(this, "OrdersAlb", {
       loadBalancerName: "orders-app-alb",
       vpc,
-      internetFacing: true,
-      vpcSubnets: { subnets: publicSubnets },
+      internetFacing: false,
+      vpcSubnets: { subnets: appSubnets },
       securityGroup: albSecurityGroup
     });
 
@@ -42,7 +43,7 @@ export class AlbStack extends Stack {
       }
     });
 
-    this.alb.addListener("HttpListener", {
+    this.httpListener = this.alb.addListener("HttpListener", {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultTargetGroups: [this.targetGroup]

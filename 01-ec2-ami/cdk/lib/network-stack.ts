@@ -10,6 +10,7 @@ export class NetworkStack extends Stack {
   public readonly appSubnets: ec2.ISubnet[];
   public readonly dbSubnets: ec2.ISubnet[];
 
+  public readonly vpcLinkSecurityGroup: ec2.SecurityGroup;
   public readonly albSecurityGroup: ec2.SecurityGroup;
   public readonly appSecurityGroup: ec2.SecurityGroup;
   public readonly dbSecurityGroup: ec2.SecurityGroup;
@@ -49,6 +50,12 @@ export class NetworkStack extends Stack {
     this.dbSubnets = this.vpc.selectSubnets({ subnetGroupName: "db" }).subnets;
 
     // Security Groups
+    this.vpcLinkSecurityGroup = new ec2.SecurityGroup(this, "VpcLinkSg", {
+      vpc: this.vpc,
+      securityGroupName: "orders-app-sg-vpclink",
+      description: "SG used by API Gateway VPC Link ENIs"
+    });
+
     this.albSecurityGroup = new ec2.SecurityGroup(this, "AlbSg", {
       vpc: this.vpc,
       securityGroupName: "orders-app-sg-alb",
@@ -67,9 +74,12 @@ export class NetworkStack extends Stack {
       description: "DB security group (shared) for orders app"
     });
 
-    // Ingress rules
-    this.albSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), "HTTP from internet");
-    this.albSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), "HTTPS from internet");
+    // Ingress Rules
+    this.albSecurityGroup.addIngressRule(
+      this.vpcLinkSecurityGroup,
+      ec2.Port.tcp(80),
+      "HTTP from API Gateway VPC Link"
+    );
 
     this.appSecurityGroup.addIngressRule(
       this.albSecurityGroup,
