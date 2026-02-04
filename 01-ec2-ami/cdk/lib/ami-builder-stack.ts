@@ -130,7 +130,7 @@ export class AmiBuilderStack extends Stack {
       "        inputs:",
       "          commands:",
       "            - dnf -y update",
-      "            - dnf -y install java-21-amazon-corretto awscli amazon-cloudwatch-agent",
+      "            - dnf -y install java-21-amazon-corretto awscli amazon-cloudwatch-agent jq",
       "      - name: CreateUserDirs",
       "        action: ExecuteBash",
       "        inputs:",

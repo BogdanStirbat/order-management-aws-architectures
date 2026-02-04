@@ -50,10 +50,6 @@ export class ComputeStack extends Stack {
       "#!/bin/bash",
       "set -euo pipefail",
       "",
-      "dnf -y update",
-      // Java + tools for pulling secret
-      "dnf -y install java-21-amazon-corretto jq awscli",
-      "",
       // Create service user + app dir
       "id -u ordersapp &>/dev/null || useradd --system --create-home --shell /sbin/nologin ordersapp",
       "mkdir -p /opt/orders-app",

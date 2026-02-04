@@ -14,6 +14,7 @@ export class NetworkStack extends Stack {
   public readonly albSecurityGroup: ec2.SecurityGroup;
   public readonly appSecurityGroup: ec2.SecurityGroup;
   public readonly dbSecurityGroup: ec2.SecurityGroup;
+  public readonly endpointsSg: ec2.SecurityGroup;
 
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
@@ -25,7 +26,7 @@ export class NetworkStack extends Stack {
       vpcName: "orders-app-vpc-01",
       ipAddresses: ec2.IpAddresses.cidr("10.0.0.0/16"),
       maxAzs: 2,
-      natGateways: 2,
+      natGateways: 0,
       subnetConfiguration: [
         {
           name: "public",
@@ -34,7 +35,7 @@ export class NetworkStack extends Stack {
         },
         {
           name: "app",
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
           cidrMask: 24
         },
         {
@@ -74,6 +75,12 @@ export class NetworkStack extends Stack {
       description: "DB security group (shared) for orders app"
     });
 
+    this.endpointsSg = new ec2.SecurityGroup(this, "EndpointsSg", {
+      vpc: this.vpc,
+      securityGroupName: "orders-app-sg-endpoints",
+      description: "SG for VPC Interface Endpoints"
+    });
+
     // Ingress Rules
     this.albSecurityGroup.addIngressRule(
       this.vpcLinkSecurityGroup,
@@ -92,6 +99,42 @@ export class NetworkStack extends Stack {
       ec2.Port.tcp(5432),
       "Postgres from app"
     );
+
+    this.endpointsSg.addIngressRule(
+      this.appSecurityGroup,
+      ec2.Port.tcp(443),
+      "HTTPS from app instances"
+    );
+
+    // Gateway VPC endpoint for S3 (removes S3 traffic from NAT)
+    this.vpc.addGatewayEndpoint("S3Endpoint", {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+      subnets: [{ subnetGroupName: "app" }], // app subnets can reach S3 without NAT
+    });
+
+    const interfaceEndpoints = [
+      ec2.InterfaceVpcEndpointAwsService.SSM,
+      ec2.InterfaceVpcEndpointAwsService.SSM_MESSAGES,
+      ec2.InterfaceVpcEndpointAwsService.EC2_MESSAGES,
+
+      ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+
+      ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+      ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_MONITORING,
+
+      // Optional but often useful:
+      ec2.InterfaceVpcEndpointAwsService.KMS,
+      ec2.InterfaceVpcEndpointAwsService.STS,
+    ];
+
+    for (const svc of interfaceEndpoints) {
+      this.vpc.addInterfaceEndpoint(`Endpoint-${svc.shortName}`, {
+        service: svc,
+        subnets: { subnets: this.appSubnets },
+        privateDnsEnabled: true,
+        securityGroups: [this.endpointsSg],
+      });
+    }
 
     new cdk.CfnOutput(this, "VpcId", { value: this.vpc.vpcId });
   }
