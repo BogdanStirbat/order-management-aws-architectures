@@ -6,6 +6,9 @@ export class CognitoStack extends Stack {
   public readonly userPool: cognito.UserPool;
   public readonly userPoolClient: cognito.UserPoolClient;
 
+  public readonly issuerUri: string;
+  public readonly audience: string;
+
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
@@ -22,5 +25,9 @@ export class CognitoStack extends Stack {
         userSrp: true,
       },
     });
+
+    this.issuerUri = `https://cognito-idp.${this.region}.amazonaws.com/${this.userPool.userPoolId}`;
+
+    this.audience = this.userPoolClient.userPoolClientId;
   }
 }

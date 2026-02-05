@@ -17,6 +17,8 @@ export interface ComputeStackProps extends StackProps {
   database: DatabaseStack;
   config: OrdersAppConfig;
   jarKey: string;
+  cognitoIssuerUri: string;
+  cognitoAudience: string;
 }
 
 export class ComputeStack extends Stack {
@@ -59,6 +61,8 @@ export class ComputeStack extends Stack {
       `DB_HOST="${database.db.dbInstanceEndpointAddress}"`,
       `DB_PORT="${database.db.dbInstanceEndpointPort}"`,
       `DB_NAME="${config.dbName}"`,
+      `COGNITO_ISSUER_URI="${props.cognitoIssuerUri}"`,
+      `COGNITO_AUDIENCE="${props.cognitoAudience}"`,
       // IMPORTANT: escape $ so TypeScript doesn't try to interpolate; bash will expand at boot
       `JDBC_URL="jdbc:postgresql://\\\${DB_HOST}:\\\${DB_PORT}/\\\${DB_NAME}"`,
       "",
@@ -78,6 +82,8 @@ export class ComputeStack extends Stack {
       'printf "SPRING_DATASOURCE_USERNAME=%s\\n" "$DB_USER" >> /etc/orders-app.env',
       'printf "SPRING_DATASOURCE_PASSWORD=%s\\n" "$DB_PASS" >> /etc/orders-app.env',
       'printf "APP_PORT=%s\\n" "$APP_PORT" >> /etc/orders-app.env',
+      `printf "COGNITO_ISSUER_URI=%s\\n" "$COGNITO_ISSUER_URI" >> /etc/orders-app.env`,
+      `printf "COGNITO_AUDIENCE=%s\\n" "$COGNITO_AUDIENCE" >> /etc/orders-app.env`,
       "chmod 0600 /etc/orders-app.env",
       "",
       // systemd unit (quoted heredoc is correct here; we *don't* want expansion inside the unit file)

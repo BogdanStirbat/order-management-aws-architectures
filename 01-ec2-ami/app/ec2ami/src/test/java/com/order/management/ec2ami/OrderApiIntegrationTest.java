@@ -1,10 +1,13 @@
 package com.order.management.ec2ami;
 
+import com.order.management.ec2ami.config.TestSecurityConfig;
 import com.order.management.ec2ami.enums.OrderStatus;
 import com.order.management.ec2ami.service.OrderService;
 import java.math.BigDecimal;
 import java.util.List;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import com.order.management.ec2ami.entity.Order;
@@ -23,6 +26,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.assertj.core.api.Assertions.assertThat;
 
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
+@Import(TestSecurityConfig.class)
 public class OrderApiIntegrationTest extends AbstractEc2amiApplicationTests {
 
   @Autowired

@@ -69,5 +69,7 @@ new ComputeStack(app, "OrdersApp-Compute", {
   targetGroup: alb.targetGroup,
   database,
   config,
-  jarKey: config.jarKey
+  jarKey: config.jarKey,
+  cognitoIssuerUri: cognito.issuerUri,
+  cognitoAudience: cognito.audience
 });
