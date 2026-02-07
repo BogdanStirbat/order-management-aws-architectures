@@ -19,8 +19,8 @@ export class NetworkStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    // - Public subnets (ALB, NAT)
-    // - Private subnets with egress (App instances)
+    // - Public subnets (AMI)
+    // - Isolated subnets (ALB, App instances)
     // - Isolated subnets (DB)
     this.vpc = new ec2.Vpc(this, "OrdersAppVpc", {
       vpcName: "orders-app-vpc-01",
@@ -106,7 +106,7 @@ export class NetworkStack extends Stack {
       "HTTPS from app instances"
     );
 
-    // Gateway VPC endpoint for S3 (removes S3 traffic from NAT)
+    // Gateway VPC endpoint for S3
     this.vpc.addGatewayEndpoint("S3Endpoint", {
       service: ec2.GatewayVpcEndpointAwsService.S3,
       subnets: [{ subnetGroupName: "app" }], // app subnets can reach S3 without NAT
