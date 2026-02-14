@@ -3,8 +3,7 @@ An order management app deployed on AWS, using 4 different architectures.
 
 # Architecture 1: deployed on EC2 using AMI.
 
-The application runs on EC2 instances. 
-The build process bakes an AMI image; EC2 instances starts from this pre-baked AMI.
+The application runs on EC2 instances.
 
 Architecture diagram:
 
