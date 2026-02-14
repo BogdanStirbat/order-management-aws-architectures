@@ -41,7 +41,6 @@ All application traffic remains **private inside the VPC** after entering throug
 
 ### Runtime architecture diagram
 
-> This diagram is intentionally simple.  
 > The editable source lives in `docs/diagrams/architecture.drawio`.
 
 ![Runtime Architecture](diagrams/architecture.png)
@@ -149,11 +148,6 @@ Each AMI contains:
 
 6. The Auto Scaling Group’s Launch Template reads this parameter and performs a **rolling instance refresh**.
 
-### Deployment architecture diagram
-
-> Editable source: `docs/diagrams/delivery.drawio`
-
-![Deployment Architecture](diagrams/delivery.png)
 
 ---
 
