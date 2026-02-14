@@ -9,7 +9,7 @@ Architecture diagram:
 
 ![Architecture Diagram](01-ec2-ami/docs/diagrams/architecture.png)
 
-Project folder: [01-ec2-ami](01-ec2-ami)
+All details can be found in the project folder: [01-ec2-ami](01-ec2-ami)
 
 ---
 
