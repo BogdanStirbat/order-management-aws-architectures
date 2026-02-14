@@ -197,7 +197,6 @@ This security posture is intentionally conservative but not exhaustive.
 Potential improvements include:
 
 - Enforcing JWT validation at API Gateway
-- Adding AWS WAF in front of API Gateway
 - Enabling TLS for all internal service-to-service traffic
 - Introducing secret rotation with application reload support
 - Adding request-level rate limiting and abuse detection
