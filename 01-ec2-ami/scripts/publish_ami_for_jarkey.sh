@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ---------------- configuration ----------------
-REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}"
-
 JARKEY_POINTER_PARAM="/orders-app/build/jarKey"
 LATEST_AMI_PARAM="/orders-app/ami/latest"
 APP_TAG_VALUE="orders-app"
 
-# Optional: pass jarKey explicitly as arg
-# ./publish_ami_for_jarkey.sh "releases/1.2.1/app.jar"
-JAR_KEY="${1:-}"
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+    echo "Usage: $0 aws_profile [JAR_KEY]"
+    exit 1
+fi
+
+AWS_PROFILE="$1"
 
 # ---------------- helpers ----------------
 die() {
@@ -19,10 +19,12 @@ die() {
 }
 
 aws_cli() {
-  aws --region "$REGION" "$@"
+  aws --profile "$AWS_PROFILE" "$@"
 }
 
-[[ -n "$REGION" ]] || die "Set AWS_REGION or AWS_DEFAULT_REGION"
+# Optional: pass jarKey explicitly as arg
+# ./publish_ami_for_jarkey.sh "releases/1.2.1/app.jar"
+JAR_KEY="${2:-}"
 
 # ---------------- determine jarKey ----------------
 if [[ -z "$JAR_KEY" ]]; then
