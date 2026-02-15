@@ -41,7 +41,6 @@ export class AmiBuilderStack extends Stack {
     // Artifacts bucket (jar lives here under an immutable key like releases/1.2.1/app.jar)
     //
     this.bucket = new s3.Bucket(this, "OrdersArtifacts", {
-      bucketName: `${cdk.Stack.of(this).stackName.toLowerCase()}-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
@@ -68,6 +67,9 @@ export class AmiBuilderStack extends Stack {
     });
     buildRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
+    );
+    buildRole.addManagedPolicy(
+        iam.ManagedPolicy.fromAwsManagedPolicyName("EC2InstanceProfileForImageBuilder")
     );
 
     // Allow the build instance to read the jarKey pointer parameter
@@ -118,122 +120,148 @@ export class AmiBuilderStack extends Stack {
     //
     // We use that to fetch the jarKey at build time.
     //
-    const componentYaml = [
-      "name: OrdersAppBake",
-      "description: Bake Orders Spring Boot app into AMI (jarKey from SSM pointer)",
-      "schemaVersion: 1.0",
-      "phases:",
-      "  - name: build",
-      "    steps:",
-      "      - name: InstallPackages",
-      "        action: ExecuteBash",
-      "        inputs:",
-      "          commands:",
-      "            - dnf -y update",
-      "            - dnf -y install java-21-amazon-corretto awscli amazon-cloudwatch-agent jq",
-      "      - name: CreateUserDirs",
-      "        action: ExecuteBash",
-      "        inputs:",
-      "          commands:",
-      "            - id -u ordersapp &>/dev/null || useradd --system --create-home --shell /sbin/nologin ordersapp",
-      "            - mkdir -p /opt/orders-app",
-      "            - chown -R ordersapp:ordersapp /opt/orders-app",
-      "      - name: DownloadJarFromS3",
-      "        action: ExecuteBash",
-      "        inputs:",
-      "          commands:",
-      "            - set -euo pipefail",
-      `            - BUCKET="${this.bucket.bucketName}"`,
-      `            - JAR_KEY="{{ aws:ssm:${this.jarKeyPointerParamName} }}"`,
-      `            - if [ -z "$JAR_KEY" ] || [ "$JAR_KEY" = "null" ]; then echo "ERROR: jarKey pointer is empty (${this.jarKeyPointerParamName})" >&2; exit 1; fi`,
-      `            - echo "Baking jar from s3://$BUCKET/$JAR_KEY"`,
-      `            - aws s3 cp "s3://$BUCKET/$JAR_KEY" /opt/orders-app/app.jar`,
-      "            - chown ordersapp:ordersapp /opt/orders-app/app.jar",
-      "            - chmod 0644 /opt/orders-app/app.jar",
-      "      - name: InstallSystemdUnit",
-      "        action: ExecuteBash",
-      "        inputs:",
-      "          commands:",
-      "            - |",
-      "              cat >/etc/systemd/system/orders-app.service <<'EOF'",
-      "              [Unit]",
-      "              Description=Orders App (Spring Boot)",
-      "              After=network-online.target",
-      "              Wants=network-online.target",
-      "",
-      "              [Service]",
-      "              Type=simple",
-      "              User=ordersapp",
-      "              WorkingDirectory=/opt/orders-app",
-      "              EnvironmentFile=/etc/orders-app.env",
-      "              ExecStart=/usr/bin/java -jar /opt/orders-app/app.jar",
-      "              Restart=always",
-      "              RestartSec=5",
-      "              SuccessExitStatus=143",
-      "",
-      "              [Install]",
-      "              WantedBy=multi-user.target",
-      "              EOF",
-      "            - systemctl daemon-reload",
-      "            - systemctl enable orders-app.service",
-      "      - name: ConfigureCloudWatchAgent",
-      "        action: ExecuteBash",
-      "        inputs:",
-      "          commands:",
-      "            - set -euo pipefail",
-      "            - mkdir -p /opt/aws/amazon-cloudwatch-agent/etc",
-      "            - |",
-      "              cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'EOF'",
-      "              {",
-      "                \"agent\": {",
-      "                  \"metrics_collection_interval\": 60,",
-      "                  \"logfile\": \"/opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log\"",
-      "                },",
-      "                \"metrics\": {",
-      "                  \"append_dimensions\": {",
-      "                    \"AutoScalingGroupName\": \"${aws:AutoScalingGroupName}\",",
-      "                    \"InstanceId\": \"${aws:InstanceId}\"",
-      "                  },",
-      "                  \"metrics_collected\": {",
-      "                    \"mem\": {",
-      "                      \"measurement\": [\"mem_used_percent\"],",
-      "                      \"metrics_collection_interval\": 60",
-      "                    },",
-      "                    \"disk\": {",
-      "                      \"measurement\": [\"used_percent\"],",
-      "                      \"resources\": [\"/\"],",
-      "                      \"metrics_collection_interval\": 60",
-      "                    }",
-      "                  }",
-      "                },",
-      "                \"logs\": {",
-      "                  \"logs_collected\": {",
-      "                    \"journald\": {",
-      "                      \"collect_list\": [",
-      "                        {",
-      "                          \"unit\": \"orders-app.service\",",
-      "                          \"log_group_name\": \"/orders-app/app\",",
-      "                          \"log_stream_name\": \"{instance_id}/orders-app\"",
-      "                        }",
-      "                      ]",
-      "                    },",
-      "                    \"files\": {",
-      "                      \"collect_list\": [", 
-      "                        {",
-      "                          \"file_path\": \"/var/log/messages\",",
-      "                          \"log_group_name\": \"/orders-app/system\",",
-      "                          \"log_stream_name\": \"{instance_id}/messages\"",
-      "                        }",
-      "                      ]",
-      "                    }",
-      "                  }",
-      "                }",
-      "              }",
-      "              EOF",
-      "            - chmod 0644 /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json",
-      "            - systemctl enable amazon-cloudwatch-agent",
-      "            - /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s",
-    ].join("\n");
+    const componentYaml = `name: OrdersAppBake
+description: Bake Orders Spring Boot app into AMI (jarKey from SSM pointer)
+schemaVersion: 1.0
+
+phases:
+  - name: build
+    steps:
+      - name: InstallPackages
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -euo pipefail
+              dnf -y update
+              dnf -y install java-21-amazon-corretto awscli amazon-cloudwatch-agent jq
+
+      - name: CreateUserDirs
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -euo pipefail
+              id -u ordersapp &>/dev/null || useradd --system --create-home --shell /sbin/nologin ordersapp
+              mkdir -p /opt/orders-app
+              chown -R ordersapp:ordersapp /opt/orders-app
+
+      - name: DownloadJarFromS3
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -euo pipefail
+
+              BUCKET="${this.bucket.bucketName}"
+              JAR_KEY="{{ aws:ssm:${this.jarKeyPointerParamName} }}"
+
+              if [ -z "$JAR_KEY" ] || [ "$JAR_KEY" = "null" ]; then
+                echo "ERROR: jarKey pointer is empty (${this.jarKeyPointerParamName})" >&2
+                exit 1
+              fi
+
+              echo "Baking jar from s3://$BUCKET/$JAR_KEY"
+              aws s3 cp "s3://$BUCKET/$JAR_KEY" /opt/orders-app/app.jar
+              chown ordersapp:ordersapp /opt/orders-app/app.jar
+              chmod 0644 /opt/orders-app/app.jar
+
+      - name: InstallSystemdUnit
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -euo pipefail
+
+              cat >/etc/systemd/system/orders-app.service <<'EOF'
+              [Unit]
+              Description=Orders App (Spring Boot)
+              After=network-online.target
+              Wants=network-online.target
+
+              [Service]
+              Type=simple
+              User=ordersapp
+              WorkingDirectory=/opt/orders-app
+              EnvironmentFile=/etc/orders-app.env
+              ExecStart=/usr/bin/java -jar /opt/orders-app/app.jar
+              Restart=always
+              RestartSec=5
+              SuccessExitStatus=143
+
+              [Install]
+              WantedBy=multi-user.target
+              EOF
+
+              systemctl daemon-reload
+              systemctl enable orders-app.service
+
+      - name: ConfigureCloudWatchAgent
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              set -euo pipefail
+
+              mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
+
+              cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'EOF'
+              {
+                "agent": {
+                  "metrics_collection_interval": 60,
+                  "logfile": "/opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log"
+                },
+                "metrics": {
+                  "append_dimensions": {
+                    "AutoScalingGroupName": "\${aws:AutoScalingGroupName}",
+                    "InstanceId": "\${aws:InstanceId}"
+                  },
+                  "metrics_collected": {
+                    "mem": {
+                      "measurement": ["mem_used_percent"],
+                      "metrics_collection_interval": 60
+                    },
+                    "disk": {
+                      "measurement": ["used_percent"],
+                      "resources": ["/"],
+                      "metrics_collection_interval": 60
+                    }
+                  }
+                },
+                "logs": {
+                  "logs_collected": {
+                    "files": {
+                      "collect_list": [
+                        {
+                          "file_path": "/var/log/orders-app/orders-app.log",
+                          "log_group_name": "/orders-app/app",
+                          "log_stream_name": "{instance_id}/orders-app"
+                        },
+                        {
+                          "file_path": "/var/log/messages",
+                          "log_group_name": "/orders-app/system",
+                          "log_stream_name": "{instance_id}/messages"
+                        }
+                      ]
+                    },
+                    "files": {
+                      "collect_list": [
+                        {
+                          "file_path": "/var/log/messages",
+                          "log_group_name": "/orders-app/system",
+                          "log_stream_name": "{instance_id}/messages"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+              EOF
+
+              chmod 0644 /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+              systemctl enable amazon-cloudwatch-agent
+              /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+`;
 
     const component = new imagebuilder.CfnComponent(this, "OrdersAppComponent", {
       name: `orders-app-bake-${this.stackName.toLowerCase()}`,
