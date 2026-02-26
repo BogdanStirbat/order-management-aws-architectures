@@ -114,14 +114,13 @@ export class EcsStack extends Stack {
 
     container.addPortMappings({
       containerPort: config.appPort,
-      hostPort: 0,
       protocol: ecs.Protocol.TCP
     });
 
     /**
      * ECS Service (EC2 launch type via capacity provider)
      * - desired tasks 2
-     * - private subnets (app-private)
+     * - private subnets (app)
      * - attach ECS SG
      * - health check grace period 300s
      * - spread tasks across AZs (best effort)
@@ -131,7 +130,7 @@ export class EcsStack extends Stack {
       taskDefinition: taskDef,
       desiredCount: config.ec2ServiceDesiredCount,
       healthCheckGracePeriod: cdk.Duration.seconds(config.ec2ServiceHealthCheckGracePeriodSeconds),
-      vpcSubnets: { subnetGroupName: 'app-private' },
+      vpcSubnets: { subnetGroupName: 'app' },
       securityGroups: [ecsSecurityGroup],
       capacityProviderStrategies: [
         {
