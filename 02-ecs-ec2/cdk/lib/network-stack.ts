@@ -61,7 +61,7 @@ export class NetworkStack extends Stack {
     this.dbSecurityGroup = new ec2.SecurityGroup(this, 'DbSecurityGroup', {
       vpc: this.vpc,
       securityGroupName: "orders-app-sg-db",
-      description: 'DB SG: allow inbound from ECS on 5432; no outbound'
+      description: 'DB SG: allow inbound from ECS on 5432'
     });
 
     // Ingress Rules
