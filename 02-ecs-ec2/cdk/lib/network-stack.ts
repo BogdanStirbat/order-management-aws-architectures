@@ -83,6 +83,12 @@ export class NetworkStack extends Stack {
       'App traffic from ALB'
     );
 
+    this.ecsSecurityGroup.addIngressRule(
+      this.ecsSecurityGroup,
+      ec2.Port.allTcp(),
+      'Allow traffic within ECS SG'
+    );
+
     this.dbSecurityGroup.addIngressRule(
       this.ecsSecurityGroup, 
       ec2.Port.tcp(5432), 

@@ -38,21 +38,39 @@ export class EcsStack extends Stack {
       clusterName: config.ecsClusterName
     });
 
+    // configure the LaunchTemplate
+    const userData = ec2.UserData.forLinux();
+    userData.addCommands(`echo ECS_CLUSTER=${config.ecsClusterName} >> /etc/ecs/ecs.config`);
+
+    const lt = new ec2.LaunchTemplate(this, 'EcsLaunchTemplate', {
+      machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
+      instanceType: new ec2.InstanceType(config.ec2InstanceType),
+      securityGroup: ecsSecurityGroup,
+      userData
+    });
+
     // AutoScalingGroup backing the EC2 capacity
     const asg = new autoscaling.AutoScalingGroup(this, 'EcsAsg', {
       vpc,
       vpcSubnets: { subnets: appSubnets },
-      instanceType: new ec2.InstanceType('t3.small'),
+
       minCapacity: config.asgMinCapacity,
       maxCapacity: config.asgMaxCapacity,
       desiredCapacity: config.asgDesiredCapacity,
-      machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
-      securityGroup: ecsSecurityGroup
+
+      mixedInstancesPolicy: {
+        launchTemplate: lt,
+      },
     });
 
     // Allow ECS agent on instances to talk to ECS + pull images, etc. (standard)
     asg.role.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEC2ContainerServiceforEC2Role')
+    );
+
+    // Allow SSM on the ECS-EC2 instances
+    asg.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
     );
 
     const cp = new ecs.AsgCapacityProvider(this, 'AsgCapacityProvider', {
@@ -63,15 +81,32 @@ export class EcsStack extends Stack {
 
     cluster.addAsgCapacityProvider(cp);
 
+    // Execution role permissions:
+    // - ECR pull + Logs are covered by AmazonECSTaskExecutionRolePolicy
+    // - add SecretsManager read for injection
+    const executionRole = new iam.Role(this, 'ExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+    });
+
+    executionRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy')
+    );
+
+    executionRole.addToPrincipalPolicy(new iam.PolicyStatement({
+      actions: ['secretsmanager:GetSecretValue'],
+      resources: [dbSecret.secretArn],
+    }));
+
     /**
     * Task Definition (EC2)
-    * - dynamic host port (0), container port 8080
+    * - container port 8080
     * - CloudWatch logs (awslogs)
     * - env vars for datasource url/username
     * - secret injection for datasource password
     */
     const taskDef = new ecs.Ec2TaskDefinition(this, 'TaskDef', {
-      networkMode: ecs.NetworkMode.AWS_VPC
+      networkMode: ecs.NetworkMode.AWS_VPC,
+      executionRole
     });
 
     // CloudWatch Logs group
@@ -80,19 +115,6 @@ export class EcsStack extends Stack {
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY
     });
-
-    // Execution role permissions:
-    // - ECR pull + Logs are covered by AmazonECSTaskExecutionRolePolicy
-    // - add SecretsManager read for injection
-    taskDef.executionRole?.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy')
-    );
-    taskDef.executionRole?.addToPrincipalPolicy(
-      new iam.PolicyStatement({
-        actions: ['secretsmanager:GetSecretValue'],
-        resources: [dbSecret.secretArn]
-      })
-    );
 
     const jdbcUrl = `jdbc:postgresql://${db.dbInstanceEndpointAddress}:${db.dbInstanceEndpointPort}/${config.dbName}`;
 
@@ -130,7 +152,7 @@ export class EcsStack extends Stack {
       taskDefinition: taskDef,
       desiredCount: config.ec2ServiceDesiredCount,
       healthCheckGracePeriod: cdk.Duration.seconds(config.ec2ServiceHealthCheckGracePeriodSeconds),
-      vpcSubnets: { subnetGroupName: 'app' },
+      vpcSubnets: { subnets: appSubnets },
       securityGroups: [ecsSecurityGroup],
       capacityProviderStrategies: [
         {

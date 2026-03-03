@@ -15,6 +15,8 @@ export type OrdersAppConfig = {
 
   ecsClusterName: string; 
 
+  ec2InstanceType: string;
+
   asgMinCapacity: number;
   asgMaxCapacity: number;
   asgDesiredCapacity: number;
@@ -90,6 +92,8 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
     dbDeletionProtection: optionalBool(app, "dbDeletionProtection", false), // dev-frendly 
 
     ecsClusterName: optionalString(app, "ecsClusterName", "ecsec2-cluster"),
+
+    ec2InstanceType: optionalString(app, "ec2InstanceType", "t3.small"),
 
     asgMinCapacity: optionalNumber(app, "asgMinCapacity", 2),
     asgMaxCapacity: optionalNumber(app, "asgMaxCapacity", 2),
