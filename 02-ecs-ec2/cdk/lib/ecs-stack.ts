@@ -40,7 +40,7 @@ export class EcsStack extends Stack {
 
     // configure the LaunchTemplate
     const userData = ec2.UserData.forLinux();
-    userData.addCommands(`echo ECS_CLUSTER=${config.ecsClusterName} >> /etc/ecs/ecs.config`);
+    userData.addCommands('echo ECS_CLUSTER=' + config.ecsClusterName + ' > /etc/ecs/ecs.config');
 
     const instanceRole = new iam.Role(this, 'EcsInstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
