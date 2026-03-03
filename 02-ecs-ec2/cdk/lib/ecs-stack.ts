@@ -42,11 +42,26 @@ export class EcsStack extends Stack {
     const userData = ec2.UserData.forLinux();
     userData.addCommands(`echo ECS_CLUSTER=${config.ecsClusterName} >> /etc/ecs/ecs.config`);
 
+    const instanceRole = new iam.Role(this, 'EcsInstanceRole', {
+      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+    });
+
+    // ECS container instance permissions
+    instanceRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEC2ContainerServiceforEC2Role')
+    );
+
+    // SSM for debugging
+    instanceRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
+    );
+
     const lt = new ec2.LaunchTemplate(this, 'EcsLaunchTemplate', {
       machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
       instanceType: new ec2.InstanceType(config.ec2InstanceType),
       securityGroup: ecsSecurityGroup,
-      userData
+      userData,
+      role: instanceRole
     });
 
     // AutoScalingGroup backing the EC2 capacity
@@ -62,16 +77,6 @@ export class EcsStack extends Stack {
         launchTemplate: lt,
       },
     });
-
-    // Allow ECS agent on instances to talk to ECS + pull images, etc. (standard)
-    asg.role.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEC2ContainerServiceforEC2Role')
-    );
-
-    // Allow SSM on the ECS-EC2 instances
-    asg.role.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
-    );
 
     const cp = new ecs.AsgCapacityProvider(this, 'AsgCapacityProvider', {
       autoScalingGroup: asg,
