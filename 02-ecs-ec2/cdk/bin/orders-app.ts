@@ -5,6 +5,7 @@ import { EcrRepositoryStack } from "../lib/ecr-repository-stack";
 import { NetworkStack } from "../lib/network-stack";
 import { DatabaseStack } from "../lib/database-stack";
 import { AlbStack } from "../lib/alb-stack";
+import { CognitoStack } from "../lib/cognito-stack";
 import { EcsStack } from "../lib/ecs-stack";
 
 const app = new cdk.App();
@@ -38,6 +39,8 @@ const alb = new AlbStack(app, "OrdersApp-Alb", {
   config
 });
 
+const cognito = new CognitoStack(app, "OrdersApp-Cognito", { env });
+
 const ecs = new EcsStack(app, "OrdersApp-Ecs", {
   env,
   vpc: network.vpc,
@@ -47,5 +50,7 @@ const ecs = new EcsStack(app, "OrdersApp-Ecs", {
   db: database.db,
   repository: ecrRepository.repository,
   targetGroup: alb.targetGroup,
+  cognitoIssuerUri: cognito.issuerUri,
+  cognitoAudience: cognito.audience,
   config
 });
