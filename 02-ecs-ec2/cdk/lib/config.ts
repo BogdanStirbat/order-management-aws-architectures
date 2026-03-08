@@ -30,11 +30,20 @@ export type OrdersAppConfig = {
 
   ec2ServiceDesiredCount: number;
   ec2ServiceHealthCheckGracePeriodSeconds: number;
+
+  alarmEmail?: string;
 };
 
 function optionalString(app: cdk.App, key: string, def: string): string {
   const v = app.node.tryGetContext(key);
   if (v === undefined || v === null) return def;
+  if (typeof v !== "string") throw new Error(`Context ${key} must be a string`);
+  return v;
+}
+
+function nullableString(app: cdk.App, key: string): string | undefined {
+  const v = app.node.tryGetContext(key);
+  if (v === undefined || v === null) return undefined;
   if (typeof v !== "string") throw new Error(`Context ${key} must be a string`);
   return v;
 }
@@ -108,5 +117,12 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
 
     ec2ServiceDesiredCount: optionalNumber(app, "ec2ServiceDesiredCount", 2),
     ec2ServiceHealthCheckGracePeriodSeconds: optionalNumber(app, "ec2ServiceHealthCheckGracePeriodSeconds", 300),
+
+    /**
+     * Optional email for alarm notifications.
+     * Example: cdk deploy -c alarmEmail=you@example.com
+     * 
+     */
+    alarmEmail: nullableString(app, "alarmEmail"),
   }
 }

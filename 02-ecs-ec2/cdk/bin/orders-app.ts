@@ -7,6 +7,7 @@ import { DatabaseStack } from "../lib/database-stack";
 import { AlbStack } from "../lib/alb-stack";
 import { CognitoStack } from "../lib/cognito-stack";
 import { EcsStack } from "../lib/ecs-stack";
+import { MonitoringStack } from "../lib/monitoring-stack";
 
 const app = new cdk.App();
 const config = loadConfig(app);
@@ -52,5 +53,16 @@ const ecs = new EcsStack(app, "OrdersApp-Ecs", {
   targetGroup: alb.targetGroup,
   cognitoIssuerUri: cognito.issuerUri,
   cognitoAudience: cognito.audience,
+  config
+});
+
+new MonitoringStack(app, "OrdersApp-Monitoring", {
+  env,
+  cluster: ecs.cluster,
+  service: ecs.service,
+  alb: alb.alb,
+  targetGroup: alb.targetGroup,
+  db: database.db,
+  appLogGroup: ecs.logGroup,
   config
 });

@@ -27,6 +27,10 @@ export interface EcsStackProps extends StackProps {
 }
 
 export class EcsStack extends Stack {
+  public readonly cluster: ecs.Cluster;
+  public readonly service: ecs.Ec2Service;
+  public readonly logGroup: logs.LogGroup;
+
   constructor(scope: Construct, id: string, props: EcsStackProps) {
     super(scope, id, props);
 
@@ -35,7 +39,7 @@ export class EcsStack extends Stack {
     /**
      * ECS Cluster (EC2) + Capacity Provider
      */
-    const cluster = new ecs.Cluster(this, 'EcsCluster', {
+    this.cluster = new ecs.Cluster(this, 'EcsCluster', {
       vpc,
       clusterName: config.ecsClusterName
     });
@@ -89,7 +93,7 @@ export class EcsStack extends Stack {
       enableManagedTerminationProtection: false
     });
 
-    cluster.addAsgCapacityProvider(cp);
+    this.cluster.addAsgCapacityProvider(cp);
 
     // Execution role permissions:
     // - ECR pull + Logs are covered by AmazonECSTaskExecutionRolePolicy
@@ -120,7 +124,7 @@ export class EcsStack extends Stack {
     });
 
     // CloudWatch Logs group
-    const logGroup = new logs.LogGroup(this, 'OrdersAppLogGroup', {
+    this.logGroup = new logs.LogGroup(this, 'OrdersAppLogGroup', {
       logGroupName: `/ecs/${cdk.Stack.of(this).stackName}/app`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY
@@ -132,7 +136,7 @@ export class EcsStack extends Stack {
       image: ecs.ContainerImage.fromEcrRepository(repository, config.imageTag),
       memoryReservationMiB: config.containerMemoryReservationMB,
       logging: ecs.LogDrivers.awsLogs({
-        logGroup,
+        logGroup: this.logGroup,
         streamPrefix: 'app'
       }),
       environment: {
@@ -159,8 +163,8 @@ export class EcsStack extends Stack {
      * - health check grace period 300s
      * - spread tasks across AZs (best effort)
      */
-    const service = new ecs.Ec2Service(this, 'Service', {
-      cluster,
+    this.service = new ecs.Ec2Service(this, 'Service', {
+      cluster: this.cluster,
       taskDefinition: taskDef,
       desiredCount: config.ec2ServiceDesiredCount,
       healthCheckGracePeriod: cdk.Duration.seconds(config.ec2ServiceHealthCheckGracePeriodSeconds),
@@ -179,6 +183,6 @@ export class EcsStack extends Stack {
     });
 
     // Register service with the target group (IP targets, awsvpc mode)
-    service.attachToApplicationTargetGroup(targetGroup);
+    this.service.attachToApplicationTargetGroup(targetGroup);
   }
 }
