@@ -10,6 +10,7 @@ export class NetworkStack extends Stack {
   public readonly appSubnets: ec2.ISubnet[];
   public readonly dbSubnets: ec2.ISubnet[];
 
+  public readonly vpcLinkSecurityGroup: ec2.SecurityGroup;
   public readonly albSecurityGroup: ec2.SecurityGroup;
   public readonly ecsSecurityGroup: ec2.SecurityGroup;
   public readonly dbSecurityGroup: ec2.SecurityGroup;
@@ -50,6 +51,12 @@ export class NetworkStack extends Stack {
     this.dbSubnets = this.vpc.selectSubnets({ subnetGroupName: "db" }).subnets;
 
     // Security Groups
+    this.vpcLinkSecurityGroup = new ec2.SecurityGroup(this, "VpcLinkSg", {
+      vpc: this.vpc,
+      securityGroupName: "orders-app-sg-vpclink",
+      description: "SG used by API Gateway VPC Link ENIs"
+    });
+
     this.albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
       vpc: this.vpc,
       securityGroupName: "orders-app-sg-alb",
@@ -68,17 +75,17 @@ export class NetworkStack extends Stack {
       description: 'DB SG: allow inbound from ECS on 5432'
     });
 
+    this.endpointsSg = new ec2.SecurityGroup(this, "EndpointsSg", {
+      vpc: this.vpc,
+      securityGroupName: "orders-app-sg-endpoints",
+      description: "SG for VPC Interface Endpoints"
+    });
+
     // Ingress Rules
     this.albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(), 
+      this.vpcLinkSecurityGroup,
       ec2.Port.tcp(80), 
       'HTTP from internet'
-    );
-
-    this.albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(), 
-      ec2.Port.tcp(443), 
-      'HTTPS from internet'
     );
 
     this.ecsSecurityGroup.addIngressRule(
@@ -99,11 +106,11 @@ export class NetworkStack extends Stack {
       'PostgreSQL from ECS'
     );
 
-    this.endpointsSg = new ec2.SecurityGroup(this, "EndpointsSg", {
-      vpc: this.vpc,
-      securityGroupName: "orders-app-sg-endpoints",
-      description: "SG for VPC Interface Endpoints"
-    });
+    this.endpointsSg.addIngressRule(
+      this.ecsSecurityGroup,
+      ec2.Port.tcp(443),
+      "HTTPS from ecs tasks"
+    );
 
     // Gateway VPC endpoint for S3
     this.vpc.addGatewayEndpoint("S3Endpoint", {

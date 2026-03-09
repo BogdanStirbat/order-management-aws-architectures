@@ -6,6 +6,7 @@ import { NetworkStack } from "../lib/network-stack";
 import { DatabaseStack } from "../lib/database-stack";
 import { AlbStack } from "../lib/alb-stack";
 import { CognitoStack } from "../lib/cognito-stack";
+import { ApiStack } from "../lib/api-stack";
 import { EcsStack } from "../lib/ecs-stack";
 import { MonitoringStack } from "../lib/monitoring-stack";
 
@@ -41,6 +42,16 @@ const alb = new AlbStack(app, "OrdersApp-Alb", {
 });
 
 const cognito = new CognitoStack(app, "OrdersApp-Cognito", { env });
+
+new ApiStack(app, "OrdersApp-Api", {
+  env,
+  vpc: network.vpc,
+  appSubnets: network.appSubnets,
+  vpcLinkSecurityGroup: network.vpcLinkSecurityGroup,
+  albListener: alb.httpListener, // expose listener from AlbStack
+  userPool: cognito.userPool,
+  userPoolClient: cognito.userPoolClient,
+});
 
 const ecs = new EcsStack(app, "OrdersApp-Ecs", {
   env,
