@@ -36,7 +36,7 @@ const database = new DatabaseStack(app, "OrdersApp-Database", {
 const alb = new AlbStack(app, "OrdersApp-Alb", {
   env,
   vpc: network.vpc,
-  publicSubnets: network.publicSubnets,
+  appSubnets: network.appSubnets,
   albSecurityGroup: network.albSecurityGroup,
   config
 });

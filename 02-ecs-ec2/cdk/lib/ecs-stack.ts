@@ -66,7 +66,7 @@ export class EcsStack extends Stack {
     );
 
     const lt = new ec2.LaunchTemplate(this, 'EcsLaunchTemplate', {
-      machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
+      machineImage: ecs.EcsOptimizedImage.amazonLinux2023(),
       instanceType: new ec2.InstanceType(config.ec2InstanceType),
       securityGroup: ecsSecurityGroup,
       userData,

@@ -6,7 +6,6 @@ import { Construct } from "constructs";
 export class NetworkStack extends Stack {
   public readonly vpc: ec2.Vpc;
 
-  public readonly publicSubnets: ec2.ISubnet[];
   public readonly appSubnets: ec2.ISubnet[];
   public readonly dbSubnets: ec2.ISubnet[];
 
@@ -19,7 +18,7 @@ export class NetworkStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
-    // - Public subnets (AMI)
+    // - Reserved public subnets address space
     // - Isolated subnets (ALB, App instances)
     // - Isolated subnets (DB)
     this.vpc = new ec2.Vpc(this, 'OrdersAppVpc', {
@@ -29,9 +28,10 @@ export class NetworkStack extends Stack {
       natGateways: 0, 
       subnetConfiguration: [
         {
-          name: 'public',
+          name: 'public-reserved',
           subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24
+          cidrMask: 24,
+          reserved: true,
         },
         {
           name: 'app',
@@ -46,7 +46,6 @@ export class NetworkStack extends Stack {
       ]
     });
 
-    this.publicSubnets = this.vpc.selectSubnets({ subnetGroupName: "public" }).subnets;
     this.appSubnets = this.vpc.selectSubnets({ subnetGroupName: "app" }).subnets;
     this.dbSubnets = this.vpc.selectSubnets({ subnetGroupName: "db" }).subnets;
 
@@ -85,7 +84,7 @@ export class NetworkStack extends Stack {
     this.albSecurityGroup.addIngressRule(
       this.vpcLinkSecurityGroup,
       ec2.Port.tcp(80), 
-      'HTTP from internet'
+      'HTTP from API Gateway VPC Link'
     );
 
     this.ecsSecurityGroup.addIngressRule(
@@ -119,6 +118,13 @@ export class NetworkStack extends Stack {
     });
 
     const interfaceEndpoints = [
+      ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
+      ec2.InterfaceVpcEndpointAwsService.ECR,
+
+      ec2.InterfaceVpcEndpointAwsService.ECS,
+      ec2.InterfaceVpcEndpointAwsService.ECS_AGENT,
+      ec2.InterfaceVpcEndpointAwsService.ECS_TELEMETRY,
+
       ec2.InterfaceVpcEndpointAwsService.SSM,
       ec2.InterfaceVpcEndpointAwsService.SSM_MESSAGES,
       ec2.InterfaceVpcEndpointAwsService.EC2_MESSAGES,
@@ -131,6 +137,8 @@ export class NetworkStack extends Stack {
       // Optional but often useful:
       ec2.InterfaceVpcEndpointAwsService.KMS,
       ec2.InterfaceVpcEndpointAwsService.STS,
+
+      ec2.InterfaceVpcEndpointAwsService.COGNITO_IDP,
     ];
 
     for (const svc of interfaceEndpoints) {
