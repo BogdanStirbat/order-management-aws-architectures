@@ -61,6 +61,13 @@ export class ApiStack extends Stack {
       authorizer: jwtAuthorizer,
     });
 
+    this.httpApi.addRoutes({
+      path: "/",
+      methods: [apigwv2.HttpMethod.ANY],
+      integration: albIntegration,
+      authorizer: jwtAuthorizer,
+    });
+
     // ---- WAF (Web ACL) ----
     // Attach WAF to the API Gateway stage.
     const webAcl = new wafv2.CfnWebACL(this, "OrdersWebAcl", {
