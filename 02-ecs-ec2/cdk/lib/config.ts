@@ -21,6 +21,11 @@ export type OrdersAppConfig = {
   asgMaxCapacity: number;
   asgDesiredCapacity: number;
 
+  ec2ServiceMinCapacity: number;
+  ec2ServiceMaxCapacity: number;
+  ec2ServiceCpuTargetUtilizationPercent: number;
+  ec2ServiceMemoryTargetUtilizationPercent: number;
+
   imageTag: string;
 
   containerMemoryReservationMB: number;
@@ -105,12 +110,17 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
     ec2InstanceType: optionalString(app, "ec2InstanceType", "t3.small"),
 
     asgMinCapacity: optionalNumber(app, "asgMinCapacity", 2),
-    asgMaxCapacity: optionalNumber(app, "asgMaxCapacity", 2),
+    asgMaxCapacity: optionalNumber(app, "asgMaxCapacity", 4),
     asgDesiredCapacity: optionalNumber(app, "asgDesiredCapacity", 2),
+
+    ec2ServiceMinCapacity: optionalNumber(app, "ec2ServiceMinCapacity", 2),
+    ec2ServiceMaxCapacity: optionalNumber(app, "ec2ServiceMaxCapacity", 4),
+    ec2ServiceCpuTargetUtilizationPercent: optionalNumber(app, "ec2ServiceCpuTargetUtilizationPercent", 70),
+    ec2ServiceMemoryTargetUtilizationPercent: optionalNumber(app, "ec2ServiceMemoryTargetUtilizationPercent", 75),
 
     imageTag: optionalString(app, "imageTag", "latest"),
 
-    containerMemoryReservationMB: optionalNumber(app, "containerMemoryReservationMB", 512),
+    containerMemoryReservationMB: optionalNumber(app, "containerMemoryReservationMB", 1024),
 
     appPort: optionalNumber(app, "appPort", 8080),
     healthCheckPath: optionalString(app, "healthCheckPath", "/actuator/health/readiness"),

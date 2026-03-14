@@ -82,6 +82,9 @@ export class EcsStack extends Stack {
       maxCapacity: config.asgMaxCapacity,
       desiredCapacity: config.asgDesiredCapacity,
 
+      // Required for ECS managed termination protection
+      newInstancesProtectedFromScaleIn: true,
+
       mixedInstancesPolicy: {
         launchTemplate: lt,
       },
@@ -89,8 +92,17 @@ export class EcsStack extends Stack {
 
     const cp = new ecs.AsgCapacityProvider(this, 'AsgCapacityProvider', {
       autoScalingGroup: asg,
-      enableManagedScaling: false,
-      enableManagedTerminationProtection: false
+
+      enableManagedScaling: true,
+      enableManagedTerminationProtection: true,
+
+      // graceful shutdown / rescheduling
+      enableManagedDraining: true,
+
+      targetCapacityPercent: 100,
+      minimumScalingStepSize: 1,
+      maximumScalingStepSize: 1,
+      instanceWarmupPeriod: 300,
     });
 
     this.cluster.addAsgCapacityProvider(cp);
@@ -135,18 +147,34 @@ export class EcsStack extends Stack {
     const container = taskDef.addContainer('AppContainer', {
       image: ecs.ContainerImage.fromEcrRepository(repository, config.imageTag),
       memoryReservationMiB: config.containerMemoryReservationMB,
+
+      stopTimeout: cdk.Duration.seconds(60),
+
       logging: ecs.LogDrivers.awsLogs({
         logGroup: this.logGroup,
         streamPrefix: 'app'
       }),
+
       environment: {
         SPRING_DATASOURCE_URL: jdbcUrl,
         SPRING_DATASOURCE_USERNAME: 'postgres',
         COGNITO_ISSUER_URI: props.cognitoIssuerUri,
         COGNITO_AUDIENCE: props.cognitoAudience
       },
+
       secrets: {
         SPRING_DATASOURCE_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, 'password')
+      },
+
+      healthCheck: {
+        command: [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/actuator/health/liveness || exit 1"
+        ],
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        retries: 3,
+        startPeriod: cdk.Duration.seconds(60)
       }
     });
 
@@ -184,5 +212,23 @@ export class EcsStack extends Stack {
 
     // Register service with the target group (IP targets, awsvpc mode)
     this.service.attachToApplicationTargetGroup(targetGroup);
+
+    // --- ECS Service Auto Scaling (task count) ---
+    const scalableTarget = this.service.autoScaleTaskCount({
+      minCapacity: config.ec2ServiceMinCapacity,
+      maxCapacity: config.ec2ServiceMaxCapacity,
+    });
+
+    scalableTarget.scaleOnCpuUtilization('CpuScaling', {
+      targetUtilizationPercent: config.ec2ServiceCpuTargetUtilizationPercent,
+      scaleInCooldown: cdk.Duration.seconds(120),
+      scaleOutCooldown: cdk.Duration.seconds(60),
+    });
+
+    scalableTarget.scaleOnMemoryUtilization('MemoryScaling', {
+      targetUtilizationPercent: config.ec2ServiceMemoryTargetUtilizationPercent,
+      scaleInCooldown: cdk.Duration.seconds(120),
+      scaleOutCooldown: cdk.Duration.seconds(60),
+    });
   }
 }

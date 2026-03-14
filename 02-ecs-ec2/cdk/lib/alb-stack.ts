@@ -36,6 +36,7 @@ export class AlbStack extends Stack {
       port: config.appPort,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
+      deregistrationDelay: cdk.Duration.seconds(60),
       healthCheck: {
         enabled: true,
         path: config.healthCheckPath,
