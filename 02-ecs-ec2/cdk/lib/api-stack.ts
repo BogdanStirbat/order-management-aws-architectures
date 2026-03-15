@@ -1,4 +1,4 @@
-import { Stack, StackProps } from "aws-cdk-lib";
+import { Stack, StackProps, RemovalPolicy } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
@@ -7,6 +7,8 @@ import * as apigwv2Integrations from "aws-cdk-lib/aws-apigatewayv2-integrations"
 import * as apigwv2Authorizers from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import * as cognito from "aws-cdk-lib/aws-cognito";
+import * as logs from "aws-cdk-lib/aws-logs";
+import * as apigw from "aws-cdk-lib/aws-apigateway";
 
 export interface ApiStackProps extends StackProps {
   vpc: ec2.IVpc;
@@ -19,6 +21,8 @@ export interface ApiStackProps extends StackProps {
 
 export class ApiStack extends Stack {
   public readonly httpApi: apigwv2.HttpApi;
+  public readonly accessLogGroup: logs.LogGroup;
+  public readonly defaultStage: apigwv2.HttpStage;
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
@@ -49,8 +53,15 @@ export class ApiStack extends Stack {
       }
     );
 
+    this.accessLogGroup = new logs.LogGroup(this, "HttpApiAccessLogGroup", {
+      logGroupName: `/aws/apigateway/${this.stackName}/access`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: RemovalPolicy.DESTROY, // dev-friendly
+    });
+
     this.httpApi = new apigwv2.HttpApi(this, "OrdersHttpApi", {
       apiName: "orders-app-http-api",
+      createDefaultStage: false,
     });
 
     // Protect everything by default (proxy-style)
@@ -66,6 +77,38 @@ export class ApiStack extends Stack {
       methods: [apigwv2.HttpMethod.ANY],
       integration: albIntegration,
       authorizer: jwtAuthorizer,
+    });
+
+    this.defaultStage = this.httpApi.addStage("DefaultStage", {
+      stageName: "$default",
+      autoDeploy: true,
+      accessLogSettings: {
+        destination: new apigwv2.LogGroupLogDestination(this.accessLogGroup),
+        format: apigw.AccessLogFormat.custom(JSON.stringify({
+          requestId: "$context.requestId",
+          ip: "$context.identity.sourceIp",
+          requestTime: "$context.requestTime",
+          httpMethod: "$context.httpMethod",
+          routeKey: "$context.routeKey",
+          path: "$context.path",
+          status: "$context.status",
+          protocol: "$context.protocol",
+          responseLength: "$context.responseLength",
+
+          authorizerError: "$context.authorizer.error",
+
+          jwtSub: "$context.authorizer.jwt.claims.sub",
+          jwtClientId: "$context.authorizer.jwt.claims.client_id",
+          jwtTokenUse: "$context.authorizer.jwt.claims.token_use",
+          jwtScope: "$context.authorizer.jwt.claims.scope",
+
+          integrationStatus: "$context.integration.integrationStatus",
+          integrationLatencyMs: "$context.integration.latency",
+          awsEndpointRequestId: "$context.integration.requestId",
+          integrationError: "$context.integration.error",
+          integrationErrorMessage: "$context.integrationErrorMessage"
+        })),
+      },
     });
 
     // ---- WAF (Web ACL) ----

@@ -1,8 +1,9 @@
 import * as cdk from "aws-cdk-lib";
-import { Stack, StackProps } from "aws-cdk-lib";
+import { Stack, StackProps, RemovalPolicy } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import type { OrdersAppConfig } from "./config";
 
 export interface AlbStackProps extends StackProps {
@@ -16,11 +17,21 @@ export class AlbStack extends Stack {
   public readonly alb: elbv2.ApplicationLoadBalancer;
   public readonly targetGroup: elbv2.ApplicationTargetGroup;
   public readonly httpListener: elbv2.ApplicationListener;
+  public readonly accessLogsBucket: s3.Bucket;
 
   constructor(scope: Construct, id: string, props: AlbStackProps) {
     super(scope, id, props);
 
     const { vpc, appSubnets, albSecurityGroup, config } = props;
+
+    this.accessLogsBucket = new s3.Bucket(this, "AlbAccessLogsBucket", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      versioned: false,
+      removalPolicy: RemovalPolicy.DESTROY, // dev-friendly
+      autoDeleteObjects: true, // dev-friendly
+    });
 
     this.alb = new elbv2.ApplicationLoadBalancer(this, "OrdersAlb", {
       loadBalancerName: "orders-app-alb",
@@ -29,6 +40,11 @@ export class AlbStack extends Stack {
       vpcSubnets: { subnets: appSubnets },
       securityGroup: albSecurityGroup
     });
+
+    this.alb.logAccessLogs(
+      this.accessLogsBucket, 
+      `alb-access/AWSLogs/${cdk.Stack.of(this).account}`
+    );
 
     this.targetGroup = new elbv2.ApplicationTargetGroup(this, "OrdersTg", {
       targetGroupName: "orders-app-tg",
@@ -53,5 +69,8 @@ export class AlbStack extends Stack {
 
     new cdk.CfnOutput(this, "AlbDnsName", { value: this.alb.loadBalancerDnsName });
     new cdk.CfnOutput(this, "TargetGroupArn", { value: this.targetGroup.targetGroupArn });
+    new cdk.CfnOutput(this, "AlbAccessLogsBucketName", {
+      value: this.accessLogsBucket.bucketName,
+    });
   }
 }
