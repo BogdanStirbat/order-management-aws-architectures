@@ -47,13 +47,16 @@ export class EcsStack extends Stack {
     // configure the LaunchTemplate
     const userData = ec2.UserData.forLinux();
 
+    // skipping the `echo "ECS_CLUSTER=${config.ecsClusterName}" >> /etc/ecs/ecs.config` line because
+    // CDK is already injecting echo ECS_CLUSTER=<cluster-name> >> /etc/ecs/ecs.config
+    // when the capacity provider is added to the cluster 
     userData.addCommands(
       `echo "ECS_ENABLE_CONTAINER_METADATA=true" >> /etc/ecs/ecs.config`
     );
 
     const instanceRole = new iam.Role(this, 'EcsInstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-    });
+    }); 
 
     // ECS container instance permissions
     instanceRole.addManagedPolicy(
@@ -85,9 +88,7 @@ export class EcsStack extends Stack {
       // Required for ECS managed termination protection
       newInstancesProtectedFromScaleIn: true,
 
-      mixedInstancesPolicy: {
-        launchTemplate: lt,
-      },
+      launchTemplate: lt,
     });
 
     const cp = new ecs.AsgCapacityProvider(this, 'AsgCapacityProvider', {
@@ -99,7 +100,7 @@ export class EcsStack extends Stack {
       // graceful shutdown / rescheduling
       enableManagedDraining: true,
 
-      targetCapacityPercent: 100,
+      targetCapacityPercent: 90,
       minimumScalingStepSize: 1,
       maximumScalingStepSize: 1,
       instanceWarmupPeriod: 300,

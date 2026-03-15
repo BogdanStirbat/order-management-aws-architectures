@@ -8,7 +8,7 @@ export type OrdersAppConfig = {
 
   dbName: string;
   dbEngineVersion: "16.9" | "16.8" | "17.6" | "17.7";
-  dbInstanceClass: string; // e.g. "t4g.micro"
+  dbInstanceClass: string; // "t4g.micro" or "t3.micro", defaults to "t4g.micro"
   dbAllocatedStorageGb: number;
   dbBackupRetentionDays: number;
   dbDeletionProtection: boolean;
