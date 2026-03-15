@@ -79,6 +79,9 @@ export class EcsStack extends Stack {
       ],
     });
 
+    // skipping the `echo "ECS_CLUSTER=${config.ecsClusterName}" >> /etc/ecs/ecs.config` line because
+    // CDK is already injecting echo ECS_CLUSTER=<cluster-name> >> /etc/ecs/ecs.config
+    // when the capacity provider is added to the cluster 
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       'echo "ECS_ENABLE_CONTAINER_METADATA=true" >> /etc/ecs/ecs.config',
