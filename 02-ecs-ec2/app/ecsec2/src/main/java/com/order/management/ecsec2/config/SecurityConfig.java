@@ -13,6 +13,7 @@ import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -24,27 +25,37 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
   /**
-   * Enforce that 'aud' matches your Cognito App Client ID.
+   * Enforce Cognito access-token validation:
+   * - issuer must match the user pool
+   * - token_use must be "access"
+   * - client_id must match the Cognito app client id
    */
   @Bean
   JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuer,
-      @Value("${cognito.audience:}") String audience) {
+      @Value("${cognito.user.pool.client.id:}") String userPoolClientId) {
     // Builds a decoder that fetches JWKS from the issuer's metadata
     NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(issuer).build();
 
     OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(issuer);
 
-    if (audience != null && !audience.isBlank()) {
-      OAuth2TokenValidator<Jwt> withAudience = jwt -> {
-        List<String> aud = jwt.getAudience();
-        if (aud != null && aud.contains(audience)) {
+    if (userPoolClientId != null && !userPoolClientId.isBlank()) {
+      OAuth2TokenValidator<Jwt> withAccessTokenUse =
+          new JwtClaimValidator<String>("token_use", "access"::equals);
+
+      OAuth2TokenValidator<Jwt> withClientId = jwt -> {
+        String clientId = jwt.getClaimAsString("client_id");
+        if (userPoolClientId.equals(clientId)) {
           return OAuth2TokenValidatorResult.success();
         }
-        OAuth2Error err = new OAuth2Error("invalid_token", "The required audience is missing", null);
+        OAuth2Error err = new OAuth2Error(
+            "invalid_token",
+            "The required client_id is missing or invalid",
+            null
+        );
         return OAuth2TokenValidatorResult.failure(err);
       };
 
-      decoder.setJwtValidator(new DelegatingValidator(withIssuer, withAudience));
+      decoder.setJwtValidator(new DelegatingValidator(withIssuer, withAccessTokenUse, withClientId));
     } else {
       decoder.setJwtValidator(withIssuer);
     }

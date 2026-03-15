@@ -22,7 +22,7 @@ export interface EcsStackProps extends StackProps {
   repository: ecr.Repository;
   targetGroup: elbv2.ApplicationTargetGroup;
   cognitoIssuerUri: string;
-  cognitoAudience: string;
+  cognitoUserPoolClientId: string;
   config: OrdersAppConfig;
 }
 
@@ -139,7 +139,7 @@ export class EcsStack extends Stack {
       db,
       repository,
       cognitoIssuerUri,
-      cognitoAudience,
+      cognitoUserPoolClientId,
       config,
     } = props;
 
@@ -184,7 +184,7 @@ export class EcsStack extends Stack {
         SPRING_DATASOURCE_URL: jdbcUrl,
         SPRING_DATASOURCE_USERNAME: 'postgres',
         COGNITO_ISSUER_URI: cognitoIssuerUri,
-        COGNITO_AUDIENCE: cognitoAudience,
+        COGNITO_USER_POOL_CLIENT_ID: cognitoUserPoolClientId,
       },
       secrets: {
         SPRING_DATASOURCE_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, 'password'),

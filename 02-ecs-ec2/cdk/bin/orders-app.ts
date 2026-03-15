@@ -63,7 +63,7 @@ const ecs = new EcsStack(app, "OrdersApp-Ecs", {
   repository: ecrRepository.repository,
   targetGroup: alb.targetGroup,
   cognitoIssuerUri: cognito.issuerUri,
-  cognitoAudience: cognito.audience,
+  cognitoUserPoolClientId: cognito.userPoolClientId,
   config
 });
 
