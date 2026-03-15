@@ -26,6 +26,16 @@ export interface EcsStackProps extends StackProps {
   config: OrdersAppConfig;
 }
 
+interface ClusterCapacityResources {
+  cluster: ecs.Cluster;
+  capacityProvider: ecs.AsgCapacityProvider;
+}
+
+interface TaskDefinitionResources {
+  taskDefinition: ecs.Ec2TaskDefinition;
+  logGroup: logs.LogGroup;
+}
+
 export class EcsStack extends Stack {
   public readonly cluster: ecs.Cluster;
   public readonly service: ecs.Ec2Service;
@@ -34,188 +44,214 @@ export class EcsStack extends Stack {
   constructor(scope: Construct, id: string, props: EcsStackProps) {
     super(scope, id, props);
 
-    const { vpc, appSubnets, ecsSecurityGroup, dbSecret, db, repository, targetGroup, config } = props;
+    const clusterCapacity = this.createClusterAndCapacity(props);
+    this.cluster = clusterCapacity.cluster;
 
-    /**
-     * ECS Cluster (EC2) + Capacity Provider
-     */
-    this.cluster = new ecs.Cluster(this, 'EcsCluster', {
-      vpc,
-      clusterName: config.ecsClusterName
+    const taskResources = this.createTaskDefinition(props);
+    this.logGroup = taskResources.logGroup;
+
+    this.service = this.createService({
+      cluster: clusterCapacity.cluster,
+      capacityProvider: clusterCapacity.capacityProvider,
+      taskDefinition: taskResources.taskDefinition,
+      targetGroup: props.targetGroup,
+      appSubnets: props.appSubnets,
+      ecsSecurityGroup: props.ecsSecurityGroup,
+      config: props.config,
     });
+  }
 
-    // configure the LaunchTemplate
-    const userData = ec2.UserData.forLinux();
+  private createClusterAndCapacity(props: EcsStackProps): ClusterCapacityResources {
+    const { vpc, appSubnets, ecsSecurityGroup, config } = props;
 
-    // skipping the `echo "ECS_CLUSTER=${config.ecsClusterName}" >> /etc/ecs/ecs.config` line because
-    // CDK is already injecting echo ECS_CLUSTER=<cluster-name> >> /etc/ecs/ecs.config
-    // when the capacity provider is added to the cluster 
-    userData.addCommands(
-      `echo "ECS_ENABLE_CONTAINER_METADATA=true" >> /etc/ecs/ecs.config`
-    );
+    const cluster = new ecs.Cluster(this, 'EcsCluster', {
+      vpc,
+      clusterName: config.ecsClusterName,
+    });
 
     const instanceRole = new iam.Role(this, 'EcsInstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-    }); 
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AmazonEC2ContainerServiceforEC2Role',
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+      ],
+    });
 
-    // ECS container instance permissions
-    instanceRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEC2ContainerServiceforEC2Role')
+    const userData = ec2.UserData.forLinux();
+    userData.addCommands(
+      'echo "ECS_ENABLE_CONTAINER_METADATA=true" >> /etc/ecs/ecs.config',
+      'echo "ECS_LOGLEVEL=info" >> /etc/ecs/ecs.config',
     );
 
-    // SSM for debugging
-    instanceRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
-    );
-
-    const lt = new ec2.LaunchTemplate(this, 'EcsLaunchTemplate', {
+    const launchTemplate = new ec2.LaunchTemplate(this, 'EcsLaunchTemplate', {
       machineImage: ecs.EcsOptimizedImage.amazonLinux2023(),
       instanceType: new ec2.InstanceType(config.ec2InstanceType),
       securityGroup: ecsSecurityGroup,
+      role: instanceRole,
       userData,
-      role: instanceRole
+      requireImdsv2: true,
     });
 
-    // AutoScalingGroup backing the EC2 capacity
     const asg = new autoscaling.AutoScalingGroup(this, 'EcsAsg', {
       vpc,
       vpcSubnets: { subnets: appSubnets },
+
+      launchTemplate,
 
       minCapacity: config.asgMinCapacity,
       maxCapacity: config.asgMaxCapacity,
       desiredCapacity: config.asgDesiredCapacity,
 
-      // Required for ECS managed termination protection
       newInstancesProtectedFromScaleIn: true,
-
-      launchTemplate: lt,
     });
 
-    const cp = new ecs.AsgCapacityProvider(this, 'AsgCapacityProvider', {
+    const capacityProvider = new ecs.AsgCapacityProvider(this, 'AsgCapacityProvider', {
       autoScalingGroup: asg,
-
       enableManagedScaling: true,
-      enableManagedTerminationProtection: true,
 
       // graceful shutdown / rescheduling
+      enableManagedTerminationProtection: true,
       enableManagedDraining: true,
 
       targetCapacityPercent: 90,
       minimumScalingStepSize: 1,
       maximumScalingStepSize: 1,
+
       instanceWarmupPeriod: 300,
     });
 
-    this.cluster.addAsgCapacityProvider(cp);
+    cluster.addAsgCapacityProvider(capacityProvider);
 
-    // Execution role permissions:
-    // - ECR pull + Logs are covered by AmazonECSTaskExecutionRolePolicy
-    // - add SecretsManager read for injection
+    return {
+      cluster,
+      capacityProvider,
+    };
+  }
+
+  private createTaskDefinition(props: EcsStackProps): TaskDefinitionResources {
+    const {
+      dbSecret,
+      db,
+      repository,
+      cognitoIssuerUri,
+      cognitoAudience,
+      config,
+    } = props;
+
     const executionRole = new iam.Role(this, 'ExecutionRole', {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AmazonECSTaskExecutionRolePolicy',
+        ),
+      ],
+    });
+
+    dbSecret.grantRead(executionRole);
+
+    const taskRole = new iam.Role(this, 'TaskRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
     });
 
-    executionRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonECSTaskExecutionRolePolicy')
-    );
-
-    executionRole.addToPrincipalPolicy(new iam.PolicyStatement({
-      actions: ['secretsmanager:GetSecretValue'],
-      resources: [dbSecret.secretArn],
-    }));
-
-    /**
-    * Task Definition (EC2)
-    * - container port 8080
-    * - CloudWatch logs (awslogs)
-    * - env vars for datasource url/username
-    * - secret injection for datasource password
-    */
-    const taskDef = new ecs.Ec2TaskDefinition(this, 'TaskDef', {
+    const taskDefinition = new ecs.Ec2TaskDefinition(this, 'TaskDef', {
       networkMode: ecs.NetworkMode.AWS_VPC,
-      executionRole
+      executionRole,
+      taskRole,
     });
 
-    // CloudWatch Logs group
-    this.logGroup = new logs.LogGroup(this, 'OrdersAppLogGroup', {
-      logGroupName: `/ecs/${cdk.Stack.of(this).stackName}/app`,
+    const logGroup = new logs.LogGroup(this, 'OrdersAppLogGroup', {
+      logGroupName: `/ecs/${Stack.of(this).stackName}/app`,
       retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const jdbcUrl = `jdbc:postgresql://${db.dbInstanceEndpointAddress}:${db.dbInstanceEndpointPort}/${config.dbName}`;
 
-    const container = taskDef.addContainer('AppContainer', {
+    const container = taskDefinition.addContainer('AppContainer', {
       image: ecs.ContainerImage.fromEcrRepository(repository, config.imageTag),
       memoryReservationMiB: config.containerMemoryReservationMB,
-
       stopTimeout: cdk.Duration.seconds(60),
-
       logging: ecs.LogDrivers.awsLogs({
-        logGroup: this.logGroup,
-        streamPrefix: 'app'
+        logGroup,
+        streamPrefix: 'app',
       }),
-
       environment: {
         SPRING_DATASOURCE_URL: jdbcUrl,
         SPRING_DATASOURCE_USERNAME: 'postgres',
-        COGNITO_ISSUER_URI: props.cognitoIssuerUri,
-        COGNITO_AUDIENCE: props.cognitoAudience
+        COGNITO_ISSUER_URI: cognitoIssuerUri,
+        COGNITO_AUDIENCE: cognitoAudience,
       },
-
       secrets: {
-        SPRING_DATASOURCE_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, 'password')
+        SPRING_DATASOURCE_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, 'password'),
       },
-
       healthCheck: {
         command: [
-          "CMD-SHELL",
-          "curl -f http://localhost:8080/actuator/health/liveness || exit 1"
+          'CMD-SHELL',
+          'curl -f http://localhost:8080/actuator/health/liveness || exit 1',
         ],
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(5),
         retries: 3,
-        startPeriod: cdk.Duration.seconds(60)
-      }
+        startPeriod: cdk.Duration.seconds(60),
+      },
     });
 
     container.addPortMappings({
       containerPort: config.appPort,
-      protocol: ecs.Protocol.TCP
+      protocol: ecs.Protocol.TCP,
     });
 
-    /**
-     * ECS Service (EC2 launch type via capacity provider)
-     * - desired tasks 2
-     * - private subnets (app)
-     * - attach ECS SG
-     * - health check grace period 300s
-     * - spread tasks across AZs (best effort)
-     */
-    this.service = new ecs.Ec2Service(this, 'Service', {
-      cluster: this.cluster,
-      taskDefinition: taskDef,
+    return {
+      taskDefinition,
+      logGroup,
+    };
+  }
+
+  private createService(params: {
+    cluster: ecs.Cluster;
+    capacityProvider: ecs.AsgCapacityProvider;
+    taskDefinition: ecs.Ec2TaskDefinition;
+    targetGroup: elbv2.IApplicationTargetGroup;
+    appSubnets: ec2.ISubnet[];
+    ecsSecurityGroup: ec2.ISecurityGroup;
+    config: OrdersAppConfig;
+  }): ecs.Ec2Service {
+    const {
+      cluster,
+      capacityProvider,
+      taskDefinition,
+      targetGroup,
+      appSubnets,
+      ecsSecurityGroup,
+      config,
+    } = params;
+
+    const service = new ecs.Ec2Service(this, 'Service', {
+      cluster,
+      taskDefinition,
       desiredCount: config.ec2ServiceDesiredCount,
-      healthCheckGracePeriod: cdk.Duration.seconds(config.ec2ServiceHealthCheckGracePeriodSeconds),
+      healthCheckGracePeriod: cdk.Duration.seconds(
+        config.ec2ServiceHealthCheckGracePeriodSeconds,
+      ),
       vpcSubnets: { subnets: appSubnets },
       securityGroups: [ecsSecurityGroup],
       capacityProviderStrategies: [
         {
-          capacityProvider: cp.capacityProviderName,
-          weight: 1
-        }
+          capacityProvider: capacityProvider.capacityProviderName,
+          weight: 1,
+        },
       ],
       placementStrategies: [
         ecs.PlacementStrategy.spreadAcross('attribute:ecs.availability-zone'),
-        ecs.PlacementStrategy.spreadAcross('instanceId')
-      ]
+        ecs.PlacementStrategy.spreadAcross('instanceId'),
+      ],
     });
 
-    // Register service with the target group (IP targets, awsvpc mode)
-    this.service.attachToApplicationTargetGroup(targetGroup);
+    service.attachToApplicationTargetGroup(targetGroup);
 
-    // --- ECS Service Auto Scaling (task count) ---
-    const scalableTarget = this.service.autoScaleTaskCount({
+    const scalableTarget = service.autoScaleTaskCount({
       minCapacity: config.ec2ServiceMinCapacity,
       maxCapacity: config.ec2ServiceMaxCapacity,
     });
@@ -231,5 +267,7 @@ export class EcsStack extends Stack {
       scaleInCooldown: cdk.Duration.seconds(120),
       scaleOutCooldown: cdk.Duration.seconds(60),
     });
+
+    return service;
   }
 }
