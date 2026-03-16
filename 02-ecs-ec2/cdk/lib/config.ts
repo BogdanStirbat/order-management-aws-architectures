@@ -107,7 +107,7 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
 
     ecsClusterName: optionalString(app, "ecsClusterName", "ecsec2-cluster"),
 
-    ec2InstanceType: optionalString(app, "ec2InstanceType", "t3.small"),
+    ec2InstanceType: optionalString(app, "ec2InstanceType", "t3.medium"),
 
     asgMinCapacity: optionalNumber(app, "asgMinCapacity", 2),
     asgMaxCapacity: optionalNumber(app, "asgMaxCapacity", 4),

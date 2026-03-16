@@ -43,7 +43,7 @@ const alb = new AlbStack(app, "OrdersApp-Alb", {
 
 const cognito = new CognitoStack(app, "OrdersApp-Cognito", { env });
 
-new ApiStack(app, "OrdersApp-Api", {
+const api = new ApiStack(app, "OrdersApp-Api", {
   env,
   vpc: network.vpc,
   appSubnets: network.appSubnets,
@@ -75,5 +75,7 @@ new MonitoringStack(app, "OrdersApp-Monitoring", {
   targetGroup: alb.targetGroup,
   db: database.db,
   appLogGroup: ecs.logGroup,
+  httpApi: api.httpApi,
+  apiAccessLogGroup: api.accessLogGroup,
   config
 });

@@ -12,6 +12,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 
 export interface EcsStackProps extends StackProps {
   vpc: ec2.IVpc;
@@ -76,6 +77,7 @@ export class EcsStack extends Stack {
           'service-role/AmazonEC2ContainerServiceforEC2Role',
         ),
         iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
       ],
     });
 
@@ -86,6 +88,53 @@ export class EcsStack extends Stack {
     userData.addCommands(
       'echo "ECS_ENABLE_CONTAINER_METADATA=true" >> /etc/ecs/ecs.config',
       'echo "ECS_LOGLEVEL=info" >> /etc/ecs/ecs.config',
+
+      'yum install -y amazon-cloudwatch-agent',
+
+      'cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<\'EOF\'',
+      JSON.stringify({
+        logs: {
+          logs_collected: {
+            files: {
+              collect_list: [
+                {
+                  file_path: "/var/log/messages",
+                  log_group_name: "/ec2/orders-app/system",
+                  log_stream_name: "{instance_id}/messages",
+                },
+                {
+                  file_path: "/var/log/ecs/ecs-agent.log",
+                  log_group_name: "/ec2/orders-app/ecs-agent",
+                  log_stream_name: "{instance_id}/ecs-agent",
+                },
+                {
+                  file_path: "/var/log/ecs/ecs-init.log",
+                  log_group_name: "/ec2/orders-app/ecs-init",
+                  log_stream_name: "{instance_id}/ecs-init",
+                }
+              ]
+            }
+          }
+        },
+        metrics: {
+          namespace: "OrdersApp/EC2",
+          append_dimensions: {
+            InstanceId: "${aws:InstanceId}"
+          },
+          metrics_collected: {
+            mem: {
+              measurement: ["mem_used_percent"]
+            },
+            disk: {
+              measurement: ["used_percent"],
+              resources: ["*"]
+            }
+          }
+        }
+      }),
+      'EOF',
+
+      '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
     );
 
     const launchTemplate = new ec2.LaunchTemplate(this, 'EcsLaunchTemplate', {
@@ -185,6 +234,7 @@ export class EcsStack extends Stack {
         SPRING_DATASOURCE_USERNAME: 'postgres',
         COGNITO_ISSUER_URI: cognitoIssuerUri,
         COGNITO_USER_POOL_CLIENT_ID: cognitoUserPoolClientId,
+        OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318/v1/traces",
       },
       secrets: {
         SPRING_DATASOURCE_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, 'password'),
@@ -199,6 +249,25 @@ export class EcsStack extends Stack {
         retries: 3,
         startPeriod: cdk.Duration.seconds(60),
       },
+    });
+
+    // add an ADOT sidecar container
+    taskDefinition.addContainer("AdotCollector", {
+      image: ecs.ContainerImage.fromRegistry(
+        "public.ecr.aws/aws-observability/aws-otel-collector:latest"
+      ),
+      essential: true,
+      memoryReservationMiB: 256,
+      memoryLimitMiB: 512,
+      logging: ecs.LogDrivers.awsLogs({
+        logGroup,
+        streamPrefix: "adot",
+      }),
+      portMappings: [
+        { containerPort: 4317, protocol: ecs.Protocol.TCP },
+        { containerPort: 4318, protocol: ecs.Protocol.TCP },
+      ],
+      command: ["--config=/etc/ecs/ecs-default-config.yaml"],
     });
 
     container.addPortMappings({
@@ -231,6 +300,40 @@ export class EcsStack extends Stack {
       config,
     } = params;
 
+    const alb5xxDeploymentAlarm = new cloudwatch.Alarm(this, "Alb5xxDeploymentAlarm", {
+      alarmName: `${this.stackName}-deploy-alb-5xx`,
+      metric: targetGroup.metrics.httpCodeTarget(
+        elbv2.HttpCodeTarget.TARGET_5XX_COUNT,
+        {
+          period: cdk.Duration.minutes(1),
+          statistic: "Sum",
+        }
+      ),
+      threshold: 3,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    const unhealthyTargetsDeploymentAlarm = new cloudwatch.Alarm(
+      this,
+      "UnhealthyTargetsDeploymentAlarm",
+      {
+        alarmName: `${this.stackName}-deploy-unhealthy-targets`,
+        metric: targetGroup.metrics.unhealthyHostCount({
+          period: cdk.Duration.minutes(1),
+          statistic: "Average",
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
+
     const service = new ecs.Ec2Service(this, 'Service', {
       cluster,
       taskDefinition,
@@ -250,6 +353,27 @@ export class EcsStack extends Stack {
         ecs.PlacementStrategy.spreadAcross('attribute:ecs.availability-zone'),
         ecs.PlacementStrategy.spreadAcross('instanceId'),
       ],
+
+      // safer rolling deployments
+      minHealthyPercent: 100,
+      maxHealthyPercent: 200,
+
+      // fail and roll back automatically if deployment does not reach steady state
+      circuitBreaker: {
+        enable: true,
+        rollback: true,
+      },
+
+      // optional but useful when using deployment alarms
+      bakeTime: cdk.Duration.minutes(5),
+
+      deploymentAlarms: {
+        alarmNames: [
+          alb5xxDeploymentAlarm.alarmName,
+          unhealthyTargetsDeploymentAlarm.alarmName,
+        ],
+        behavior: ecs.AlarmBehavior.ROLLBACK_ON_ALARM,
+      },
     });
 
     service.attachToApplicationTargetGroup(targetGroup);

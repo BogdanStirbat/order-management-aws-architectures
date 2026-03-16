@@ -10,6 +10,7 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
+import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 
 import type { OrdersAppConfig } from "./config";
 
@@ -20,6 +21,8 @@ export interface MonitoringStackProps extends StackProps {
   targetGroup: elbv2.ApplicationTargetGroup;
   db: rds.DatabaseInstance;
   appLogGroup: logs.ILogGroup;
+  httpApi: apigwv2.HttpApi;
+  apiAccessLogGroup: logs.ILogGroup;
   config: OrdersAppConfig;
 }
 
@@ -262,6 +265,89 @@ export class MonitoringStack extends Stack {
       alarmDescription: "Application logs contain too many ERROR/Exception events",
     });
     addAlarmActions(appErrorAlarm);
+
+    //
+    // API Gateway alarms
+    //
+    const api4xxAlarm = new cloudwatch.Alarm(this, "ApiGateway4xxAlarm", {
+      alarmName: "orders-app-apigw-4xx",
+      metric: new cloudwatch.Metric({
+        namespace: "AWS/ApiGateway",
+        metricName: "4xx",
+        dimensionsMap: {
+          ApiId: props.httpApi.apiId,
+          Stage: "$default",
+        },
+        statistic: "Sum",
+        period: Duration.minutes(5),
+      }),
+      threshold: 20,
+      evaluationPeriods: 2,
+      datapointsToAlarm: 2,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: "High API Gateway 4XX responses",
+    });
+    addAlarmActions(api4xxAlarm);
+
+    const api5xxAlarm = new cloudwatch.Alarm(this, "ApiGateway5xxAlarm", {
+      alarmName: "orders-app-apigw-5xx",
+      metric: new cloudwatch.Metric({
+        namespace: "AWS/ApiGateway",
+        metricName: "5xx",
+        dimensionsMap: {
+          ApiId: props.httpApi.apiId,
+          Stage: "$default",
+        },
+        statistic: "Sum",
+        period: Duration.minutes(5),
+      }),
+      threshold: 5,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      alarmDescription: "High API Gateway 5XX responses",
+    });
+    addAlarmActions(api5xxAlarm);
+
+    //
+    // JWT authorizer failures
+    //
+    new logs.MetricFilter(this, "ApiJwtAuthorizerFailureMetricFilter", {
+      logGroup: props.apiAccessLogGroup,
+      metricNamespace: "OrdersApp",
+      metricName: "ApiJwtAuthorizerFailureCount",
+      filterPattern: logs.FilterPattern.literal('{ $.authorizerError = "*" }'),
+      metricValue: "1",
+      defaultValue: 0,
+    });
+
+    const apiJwtAuthorizerFailureMetric = new cloudwatch.Metric({
+      namespace: "OrdersApp",
+      metricName: "ApiJwtAuthorizerFailureCount",
+      statistic: "Sum",
+      period: Duration.minutes(5),
+    });
+
+    const apiJwtAuthorizerFailureAlarm = new cloudwatch.Alarm(
+      this,
+      "ApiJwtAuthorizerFailureAlarm",
+      {
+        alarmName: "orders-app-apigw-jwt-authorizer-failures",
+        metric: apiJwtAuthorizerFailureMetric,
+        threshold: 5,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: "JWT authorizer failures detected in API Gateway access logs",
+      }
+    );
+    addAlarmActions(apiJwtAuthorizerFailureAlarm);
 
     //
     // Dashboard
