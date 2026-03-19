@@ -205,6 +205,9 @@ export class EcsStack extends Stack {
 
     const taskRole = new iam.Role(this, 'TaskRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
+      ],
     });
 
     const taskDefinition = new ecs.Ec2TaskDefinition(this, 'TaskDef', {
@@ -222,7 +225,7 @@ export class EcsStack extends Stack {
     const jdbcUrl = `jdbc:postgresql://${db.dbInstanceEndpointAddress}:${db.dbInstanceEndpointPort}/${config.dbName}`;
 
     const container = taskDefinition.addContainer('AppContainer', {
-      image: ecs.ContainerImage.fromEcrRepository(repository, config.imageTag),
+      image: ecs.ContainerImage.fromEcrRepository(repository, config.appImageTag),
       memoryReservationMiB: config.containerMemoryReservationMB,
       stopTimeout: cdk.Duration.seconds(60),
       logging: ecs.LogDrivers.awsLogs({
@@ -251,12 +254,15 @@ export class EcsStack extends Stack {
       },
     });
 
+    container.addPortMappings({
+      containerPort: config.appPort,
+      protocol: ecs.Protocol.TCP,
+    });
+
     // add an ADOT sidecar container
-    taskDefinition.addContainer("AdotCollector", {
-      image: ecs.ContainerImage.fromRegistry(
-        "public.ecr.aws/aws-observability/aws-otel-collector:latest"
-      ),
-      essential: true,
+    const adotCollectorContainer = taskDefinition.addContainer("AdotCollector", {
+      image: ecs.ContainerImage.fromEcrRepository(repository, config.adotImageTag),
+      essential: false,
       memoryReservationMiB: 256,
       memoryLimitMiB: 512,
       logging: ecs.LogDrivers.awsLogs({
@@ -264,15 +270,14 @@ export class EcsStack extends Stack {
         streamPrefix: "adot",
       }),
       portMappings: [
-        { containerPort: 4317, protocol: ecs.Protocol.TCP },
         { containerPort: 4318, protocol: ecs.Protocol.TCP },
       ],
-      command: ["--config=/etc/ecs/ecs-default-config.yaml"],
+      command: ["--config=/etc/otel-config.yaml"],
     });
 
-    container.addPortMappings({
-      containerPort: config.appPort,
-      protocol: ecs.Protocol.TCP,
+    container.addContainerDependencies({
+      container: adotCollectorContainer,
+      condition: ecs.ContainerDependencyCondition.START
     });
 
     return {
