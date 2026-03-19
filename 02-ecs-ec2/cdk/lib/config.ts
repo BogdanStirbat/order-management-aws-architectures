@@ -120,7 +120,7 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
     ec2ServiceMemoryTargetUtilizationPercent: optionalNumber(app, "ec2ServiceMemoryTargetUtilizationPercent", 75),
 
     appImageTag: optionalString(app, "appImageTag", "latest"),
-    adotImageTag: optionalString(app, "adotImageTag", "adot"),
+    adotImageTag: optionalString(app, "adotImageTag", "latest"),
 
     containerMemoryReservationMB: optionalNumber(app, "containerMemoryReservationMB", 1024),
 

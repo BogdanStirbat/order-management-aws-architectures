@@ -11,21 +11,32 @@ export interface EcrRepositoryProps extends StackProps {
 
 export class EcrRepositoryStack extends Stack {
 
-  public readonly repository: ecr.Repository;
+  public readonly appRepository: ecr.Repository;
+  public readonly adotRepository: ecr.Repository;
 
   constructor(scope: Construct, id: string, props: EcrRepositoryProps) {
     super(scope, id, props);
 
     const { config } = props;
 
-    this.repository = new ecr.Repository(this, 'AppRepository', {
+    this.appRepository = new ecr.Repository(this, 'AppRepository', {
       repositoryName: config.ecrRepositoryName,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteImages: true
     });
 
-    new cdk.CfnOutput(this, 'EcrRepositoryUri', {
-      value: this.repository.repositoryUri
+    this.adotRepository = new ecr.Repository(this, 'AdotRepository', {
+      repositoryName: config.ecrRepositoryName,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteImages: true
+    });
+
+    new cdk.CfnOutput(this, 'AppRepositoryUri', {
+      value: this.appRepository.repositoryUri
+    });
+
+    new cdk.CfnOutput(this, 'AdotRepositoryUri', {
+      value: this.adotRepository.repositoryUri
     });
   }
 }

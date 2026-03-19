@@ -20,7 +20,8 @@ export interface EcsStackProps extends StackProps {
   ecsSecurityGroup: ec2.ISecurityGroup;
   dbSecret: secretsmanager.ISecret;
   db: rds.DatabaseInstance;
-  repository: ecr.Repository;
+  appRepository: ecr.Repository;
+  adotRepository: ecr.Repository;
   targetGroup: elbv2.ApplicationTargetGroup;
   cognitoIssuerUri: string;
   cognitoUserPoolClientId: string;
@@ -186,7 +187,8 @@ export class EcsStack extends Stack {
     const {
       dbSecret,
       db,
-      repository,
+      appRepository,
+      adotRepository,
       cognitoIssuerUri,
       cognitoUserPoolClientId,
       config,
@@ -225,7 +227,7 @@ export class EcsStack extends Stack {
     const jdbcUrl = `jdbc:postgresql://${db.dbInstanceEndpointAddress}:${db.dbInstanceEndpointPort}/${config.dbName}`;
 
     const container = taskDefinition.addContainer('AppContainer', {
-      image: ecs.ContainerImage.fromEcrRepository(repository, config.appImageTag),
+      image: ecs.ContainerImage.fromEcrRepository(appRepository, config.appImageTag),
       memoryReservationMiB: config.containerMemoryReservationMB,
       stopTimeout: cdk.Duration.seconds(60),
       logging: ecs.LogDrivers.awsLogs({
@@ -261,7 +263,7 @@ export class EcsStack extends Stack {
 
     // add an ADOT sidecar container
     const adotCollectorContainer = taskDefinition.addContainer("AdotCollector", {
-      image: ecs.ContainerImage.fromEcrRepository(repository, config.adotImageTag),
+      image: ecs.ContainerImage.fromEcrRepository(adotRepository, config.adotImageTag),
       essential: false,
       memoryReservationMiB: 256,
       memoryLimitMiB: 512,
