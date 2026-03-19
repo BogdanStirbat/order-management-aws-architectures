@@ -43,7 +43,7 @@ export class AlbStack extends Stack {
 
     this.alb.logAccessLogs(
       this.accessLogsBucket, 
-      `alb-access/AWSLogs/${cdk.Stack.of(this).account}`
+      "alb-access"
     );
 
     this.targetGroup = new elbv2.ApplicationTargetGroup(this, "OrdersTg", {

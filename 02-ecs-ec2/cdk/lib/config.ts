@@ -4,7 +4,8 @@ const ALLOWED_DB_ENGINE_VERSIONS = ["16.9", "16.8", "17.6", "17.7"] as const;
 type DbEngineVersion = typeof ALLOWED_DB_ENGINE_VERSIONS[number];
 
 export type OrdersAppConfig = {
-  ecrRepositoryName: string;
+  appEcrRepositoryName: string;
+  adotEcrRepositoryName: string;
 
   dbName: string;
   dbEngineVersion: "16.9" | "16.8" | "17.6" | "17.7";
@@ -97,7 +98,8 @@ function optionalDbEngineVersion(
 export function loadConfig(app: cdk.App): OrdersAppConfig {
 
   return {
-    ecrRepositoryName: optionalString(app, "ecrRepositoryName", "orders-app-ecsec2"),
+    appEcrRepositoryName: optionalString(app, "appEcrRepositoryName", "orders-app-ecsec2"),
+    adotEcrRepositoryName: optionalString(app, "adotEcrRepositoryName", "adot"),
 
     dbName: optionalString(app, "dbName", "ordersdb"),
     dbEngineVersion: optionalDbEngineVersion(app, "dbEngineVersion", "16.9"),
