@@ -134,11 +134,11 @@ export class NetworkStack extends Stack {
       ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
       ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_MONITORING,
 
-      // Optional but often useful:
       ec2.InterfaceVpcEndpointAwsService.KMS,
       ec2.InterfaceVpcEndpointAwsService.STS,
 
       ec2.InterfaceVpcEndpointAwsService.COGNITO_IDP,
+      ec2.InterfaceVpcEndpointAwsService.XRAY,
     ];
 
     for (const svc of interfaceEndpoints) {
