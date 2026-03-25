@@ -5,7 +5,6 @@ import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as apigwv2Integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as apigwv2Authorizers from "aws-cdk-lib/aws-apigatewayv2-authorizers";
-import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 
 export interface ApiStackProps extends StackProps {
@@ -59,61 +58,6 @@ export class ApiStack extends Stack {
       methods: [apigwv2.HttpMethod.ANY],
       integration: albIntegration,
       authorizer: jwtAuthorizer,
-    });
-
-    // ---- WAF (Web ACL) ----
-    // Attach WAF to the API Gateway stage.
-    const webAcl = new wafv2.CfnWebACL(this, "OrdersWebAcl", {
-      scope: "REGIONAL",
-      defaultAction: { allow: {} },
-      visibilityConfig: {
-        cloudWatchMetricsEnabled: true,
-        metricName: "orders-webacl",
-        sampledRequestsEnabled: true,
-      },
-      rules: [
-        {
-          name: "AWSManagedCommon",
-          priority: 1,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: "AWS",
-              name: "AWSManagedRulesCommonRuleSet",
-            },
-          },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: "aws-common",
-            sampledRequestsEnabled: true,
-          },
-        },
-        {
-          name: "RateLimit",
-          priority: 2,
-          action: { block: {} },
-          statement: {
-            rateBasedStatement: {
-              limit: 300, // requests per 5 minutes per IP
-              aggregateKeyType: "IP",
-            },
-          },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: "rate-limit",
-            sampledRequestsEnabled: true,
-          },
-        },
-      ],
-    });
-
-    // Associate WAF WebACL with the API Gateway stage ARN
-    // HTTP API default stage is "$default" unless you create named stages
-    const stageArn = `arn:aws:apigateway:${this.region}::/apis/${this.httpApi.apiId}/stages/$default`;
-
-    new wafv2.CfnWebACLAssociation(this, "WebAclAssoc", {
-      resourceArn: stageArn,
-      webAclArn: webAcl.attrArn,
     });
   }
 }

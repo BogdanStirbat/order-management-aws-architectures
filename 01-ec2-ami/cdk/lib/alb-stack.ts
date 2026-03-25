@@ -3,6 +3,7 @@ import { Stack, StackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
+import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import type { OrdersAppConfig } from "./config";
 
 export interface AlbStackProps extends StackProps {
@@ -47,6 +48,57 @@ export class AlbStack extends Stack {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultTargetGroups: [this.targetGroup]
+    });
+
+    // ---- WAF (Web ACL) ----
+    // Attach WAF to the ALB.
+    const webAcl = new wafv2.CfnWebACL(this, "OrdersWebAcl", {
+      scope: "REGIONAL",
+      defaultAction: { allow: {} },
+      visibilityConfig: {
+        cloudWatchMetricsEnabled: true,
+        metricName: "orders-webacl",
+        sampledRequestsEnabled: true,
+      },
+      rules: [
+        {
+          name: "AWSManagedCommon",
+          priority: 1,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: "AWS",
+              name: "AWSManagedRulesCommonRuleSet",
+            },
+          },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: "aws-common",
+            sampledRequestsEnabled: true,
+          },
+        },
+        {
+          name: "RateLimit",
+          priority: 2,
+          action: { block: {} },
+          statement: {
+            rateBasedStatement: {
+              limit: 300, // requests per 5 minutes per IP
+              aggregateKeyType: "IP",
+            },
+          },
+          visibilityConfig: {
+            cloudWatchMetricsEnabled: true,
+            metricName: "rate-limit",
+            sampledRequestsEnabled: true,
+          },
+        },
+      ],
+    });
+
+    new wafv2.CfnWebACLAssociation(this, "OrdersAlbWebAclAssociation", {
+      resourceArn: this.alb.loadBalancerArn,
+      webAclArn: webAcl.attrArn,
     });
 
     new cdk.CfnOutput(this, "AlbDnsName", { value: this.alb.loadBalancerDnsName });
