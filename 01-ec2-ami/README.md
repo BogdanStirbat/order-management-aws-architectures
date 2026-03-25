@@ -148,6 +148,7 @@ Full explanation: [docs/00-architecture.md](docs/00-architecture.md)
 - **SSM Parameter Store** – release pointers and AMI IDs
 - **EC2 Auto Scaling Group** – run application instances
 - **Application Load Balancer (internal)** – health checks and routing
+- **WAF** – Web Application Firewall
 - **API Gateway + VPC Link** – public entrypoint without exposing ALB
 - **Cognito User Pool** – JWT authentication
 - **RDS PostgreSQL (Multi-AZ)** – persistent data store
