@@ -9,10 +9,10 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.order.management</groupId>
-	<artifactId>ecsec2</artifactId>
+	<artifactId>ecsfargate</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>ecsec2</name>
-	<description>Order Management application deployed on AWS using ECS with EC2 Launch Type</description>
+	<name>ecsfargate</name>
+	<description>Order Management application deployed on AWS using ECS with Fargate</description>
 	<url/>
 	<licenses>
 		<license/>
