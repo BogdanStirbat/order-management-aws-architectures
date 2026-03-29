@@ -106,9 +106,10 @@ export class EcsStack extends Stack {
 
     const jdbcUrl = `jdbc:postgresql://${db.dbInstanceEndpointAddress}:${db.dbInstanceEndpointPort}/${config.dbName}`;
 
-    const container = taskDefinition.addContainer('AppContainer', {
+    const appContainer = taskDefinition.addContainer('AppContainer', {
       image: ecs.ContainerImage.fromEcrRepository(appRepository, config.appImageTag),
-      memoryReservationMiB: config.containerMemoryReservationMB,
+      memoryReservationMiB: config.appMemoryReservationMB,
+      memoryLimitMiB: config.appMemoryLimitMB,
       stopTimeout: cdk.Duration.seconds(60),
       logging: ecs.LogDrivers.awsLogs({
         logGroup,
@@ -136,7 +137,7 @@ export class EcsStack extends Stack {
       },
     });
 
-    container.addPortMappings({
+    appContainer.addPortMappings({
       containerPort: config.appPort,
       protocol: ecs.Protocol.TCP,
     });
@@ -146,7 +147,7 @@ export class EcsStack extends Stack {
       image: ecs.ContainerImage.fromEcrRepository(adotRepository, config.adotImageTag),
       essential: false,
       memoryReservationMiB: config.adotMemoryReservationMB,
-      memoryLimitMiB: config.adotMemoryLimitMiB,
+      memoryLimitMiB: config.adotMemoryLimitMB,
       logging: ecs.LogDrivers.awsLogs({
         logGroup,
         streamPrefix: "adot",
@@ -157,7 +158,7 @@ export class EcsStack extends Stack {
       command: ["--config=/etc/otel-config.yaml"],
     });
 
-    container.addContainerDependencies({
+    appContainer.addContainerDependencies({
       container: adotCollectorContainer,
       condition: ecs.ContainerDependencyCondition.START
     });

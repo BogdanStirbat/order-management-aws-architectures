@@ -19,8 +19,11 @@ export type OrdersAppConfig = {
   fargateTaskCpu: number;
   fargateTaskMemoryMiB: number;
 
+  appMemoryReservationMB: number;
+  appMemoryLimitMB: number;
+
   adotMemoryReservationMB: number;
-  adotMemoryLimitMiB: number;
+  adotMemoryLimitMB: number;
 
   fargateServiceMinCapacity: number;
   fargateServiceMaxCapacity: number;
@@ -29,8 +32,6 @@ export type OrdersAppConfig = {
 
   appImageTag: string;
   adotImageTag: string;
-
-  containerMemoryReservationMB: number;
 
   appPort: number;
   healthCheckPath: string;
@@ -111,10 +112,13 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
     ecsClusterName: optionalString(app, "ecsClusterName", "fargate-cluster"),
 
     fargateTaskCpu: optionalNumber(app, "fargateTaskCpu", 512),
-    fargateTaskMemoryMiB: optionalNumber(app, "fargateTaskMemoryMiB", 2048),
+    fargateTaskMemoryMiB: optionalNumber(app, "fargateTaskMemoryMiB", 2560),
+
+    appMemoryReservationMB: optionalNumber(app, "appMemoryReservationMB", 1024),
+    appMemoryLimitMB: optionalNumber(app, "appMemoryLimitMB", 1536),
 
     adotMemoryReservationMB: optionalNumber(app, "adotMemoryReservationMB", 512),
-    adotMemoryLimitMiB: optionalNumber(app, "adotMemoryLimitMiB", 1024),
+    adotMemoryLimitMB: optionalNumber(app, "adotMemoryLimitMB", 1024),
 
     fargateServiceMinCapacity: optionalNumber(app, "fargateServiceMinCapacity", 2),
     fargateServiceMaxCapacity: optionalNumber(app, "fargateServiceMaxCapacity", 4),
@@ -123,8 +127,6 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
 
     appImageTag: optionalString(app, "appImageTag", "latest"),
     adotImageTag: optionalString(app, "adotImageTag", "latest"),
-
-    containerMemoryReservationMB: optionalNumber(app, "containerMemoryReservationMB", 1024),
 
     appPort: optionalNumber(app, "appPort", 8080),
     healthCheckPath: optionalString(app, "healthCheckPath", "/actuator/health/readiness"),
