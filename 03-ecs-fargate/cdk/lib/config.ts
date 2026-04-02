@@ -112,7 +112,7 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
     ecsClusterName: optionalString(app, "ecsClusterName", "fargate-cluster"),
 
     fargateTaskCpu: optionalNumber(app, "fargateTaskCpu", 512),
-    fargateTaskMemoryMiB: optionalNumber(app, "fargateTaskMemoryMiB", 2560),
+    fargateTaskMemoryMiB: optionalNumber(app, "fargateTaskMemoryMiB", 4096),
 
     appMemoryReservationMB: optionalNumber(app, "appMemoryReservationMB", 1024),
     appMemoryLimitMB: optionalNumber(app, "appMemoryLimitMB", 1536),
