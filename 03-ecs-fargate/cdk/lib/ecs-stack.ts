@@ -157,21 +157,11 @@ export class EcsStack extends Stack {
         { containerPort: 13133, protocol: ecs.Protocol.TCP },
       ],
       command: ["--config=/etc/otel-config.yaml"],
-      healthCheck: {
-        command: [
-          "CMD-SHELL",
-          "curl -f http://localhost:13133/ || exit 1"
-        ],
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(5),
-        retries: 3,
-        startPeriod: cdk.Duration.seconds(10),
-      }
     });
 
     appContainer.addContainerDependencies({
       container: adotCollectorContainer,
-      condition: ecs.ContainerDependencyCondition.HEALTHY
+      condition: ecs.ContainerDependencyCondition.START
     });
 
     return {
