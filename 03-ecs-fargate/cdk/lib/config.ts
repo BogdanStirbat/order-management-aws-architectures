@@ -99,7 +99,7 @@ function optionalDbEngineVersion(
 export function loadConfig(app: cdk.App): OrdersAppConfig {
 
   return {
-    appEcrRepositoryName: optionalString(app, "appEcrRepositoryName", "orders-app-ecsec2"),
+    appEcrRepositoryName: optionalString(app, "appEcrRepositoryName", "orders-app-ecsfargate"),
     adotEcrRepositoryName: optionalString(app, "adotEcrRepositoryName", "adot"),
 
     dbName: optionalString(app, "dbName", "ordersdb"),
