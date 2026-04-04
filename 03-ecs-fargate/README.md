@@ -58,7 +58,6 @@ The system includes:
     - ALB access logs (S3)
 - Metrics
     - ECS CPU / memory
-    - EC2 instance metrics
     - ALB metrics
 - Alarms
     - ALB 5xx errors
@@ -95,4 +94,4 @@ The system includes:
 - Custom domain + TLS
 - Advanced WAF rules
 - External APM (Datadog / New Relic)
-- Cost optimization and scaling tuning
+- Cost optimization and task sizing tuning

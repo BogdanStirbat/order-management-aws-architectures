@@ -69,7 +69,7 @@ This ensures all traffic stays within AWS private networking.
 - Images are versioned using tags
 - Used by ECS tasks during deployment
 
-### Amazon ECS (EC2 Launch Type)
+### Amazon ECS (Fargate Launch Type)
 - ECS cluster uses AWS Fargate as compute (no EC2 instances to manage)
 - AWS handles capacity provisioning, scaling, and infrastructure lifecycle automatically
 - ECS Service ensures the desired number of tasks are running and replaces unhealthy tasks (health checks are configured)
