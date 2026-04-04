@@ -1,6 +1,6 @@
 # Architecture
 
-This project is a Order Management API built with Spring Boot and deployed on AWS using Amazon ECS with the EC2 launch type.
+This project is a Order Management API built with Spring Boot and deployed on AWS using Amazon ECS with the Fargate launch type.
 
 The architecture is a realistic cloud-native backend system with:
 - private networking and no public compute resources
@@ -14,9 +14,9 @@ The architecture is a realistic cloud-native backend system with:
 ## High-level overview
 
 At a high level, the system consists of:
-- A containerized **Spring Boot REST API** 
+- A containerized **Spring Boot REST API**
 - Internal Application Load Balancer (ALB + WAF)
-- A container orchestration engine: ECS Service (EC2 Launch Type)
+- A container orchestration engine: ECS Service (Fargate Launch Type)
 - API Gateway (HTTP API + JWT Authorizer)
 - Amazon RDS PostgreSQL for persistence
 
@@ -50,36 +50,37 @@ At a high level, the system consists of:
 ## AWS Components
 ### Amazon VPC
 - Private subnets for ECS and RDS
-- No public subnets for compute resources 
-- No NAT Gateway (cost optimization) 
+- No public subnets for compute resources
+- No NAT Gateway (cost optimization)
 - Interface VPC Endpoints used for:
-  - ECR
-  - ECS
-  - CloudWatch
-  - Secrets Manager 
-  - Cognito
-  - X-Ray 
+    - ECR
+    - ECS
+    - CloudWatch
+    - Secrets Manager
+    - Cognito
+    - X-Ray
 
 This ensures all traffic stays within AWS private networking.
 
 ### Amazon ECR
 - Stores container images:
-  - Spring Boot application
-  - ADOT collector
+    - Spring Boot application
+    - ADOT collector
 - Images are versioned using tags
 - Used by ECS tasks during deployment
 
 ### Amazon ECS (EC2 Launch Type)
-- ECS cluster backed by EC2 instances (Auto Scaling Group)
-- Capacity Provider manages scaling and instance lifecycle
-- ECS Service ensures desired number of tasks are running and replaces unhealthy tasks (health checks are configured)
-- Placement strategies:
-  - spread across availability zones
-  - spread across instances 
+- ECS cluster uses AWS Fargate as compute (no EC2 instances to manage)
+- AWS handles capacity provisioning, scaling, and infrastructure lifecycle automatically
+- ECS Service ensures the desired number of tasks are running and replaces unhealthy tasks (health checks are configured)
+- Each task runs in awsvpc network mode with its own ENI and private IP
+- High availability is achieved by:
+    - distributing tasks across multiple Availability Zones
+    - integrating with a load balancer for traffic distribution and health checks
 
 Key features:
 - rolling deployments
-- deployment circuit breaker with automatic rollback 
+- deployment circuit breaker with automatic rollback
 - container health checks
 
 ### Application Load Balancer (ALB)
@@ -94,56 +95,56 @@ Key features:
 - Uses JWT authorizer with Cognito
 - Forwards requests via VPC Link to ALB
 - Chosen over REST API for:
-  - lower cost
-  - lower latency
-  - simpler configuration
+    - lower cost
+    - lower latency
+    - simpler configuration
 
 ### Amazon Cognito
 - Handles user authentication
-- Issues JWT tokens 
+- Issues JWT tokens
 - API Gateway validates tokens
-- Application also validates issuer and client ID 
+- Application also validates issuer and client ID
 
 ### Amazon RDS (PostgreSQL)
 - Managed relational database
 - Credentials stored in AWS Secrets Manager
 - Application connects via JDBC
-- Schema managed using Flyway migrations 
+- Schema managed using Flyway migrations
 
 ### Observability (CloudWatch, ADOT, X-Ray)
 - CloudWatch Logs:
-  - application logs
-  - ECS logs
-  - ADOT logs
+    - application logs
+    - ECS logs
+    - ADOT logs
 - CloudWatch Metrics:
-  - EC2 metrics
-  - ECS service scaling metrics
-  - ALB metrics
+    - EC2 metrics
+    - ECS service scaling metrics
+    - ALB metrics
 - CloudWatch Alarms:
-  - ALB 5xx errors
-  - unhealthy targets
+    - ALB 5xx errors
+    - unhealthy targets
 - AWS X-Ray:
-  - distributed tracing
-  - traces exported via ADOT collector
+    - distributed tracing
+    - traces exported via ADOT collector
 
 ## Application Architecture
 
 The application is a Spring Boot REST API with:
 - layered architecture:
-  - controllers
-  - services
-  - repositories
+    - controllers
+    - services
+    - repositories
 - PostgreSQL persistence via JPA/Hibernate
 - Flyway for schema migrations
 - OAuth2 Resource Server for JWT validation
 - Actuator endpoints:
-  - liveness
-  - readiness 
+    - liveness
+    - readiness
 
 Additional features:
 - graceful shutdown enabled
 - structured JSON logging
-- distributed tracing via OpenTelemetry (Micrometer bridge) 
+- distributed tracing via OpenTelemetry (Micrometer bridge)
 
 ## Security Architecture
 
@@ -152,16 +153,16 @@ Additional features:
 - ECS tasks run in private subnets
 - ALB is internal-only
 - Security groups restrict traffic flow:
-  - API Gateway → ALB
-  - ALB → ECS
-  - ECS → RDS
+    - API Gateway → ALB
+    - ALB → ECS
+    - ECS → RDS
 
 ### Identity and Access Management
 - ECS Execution Role:
-  - pulls images from ECR
-  - writes logs to CloudWatch
+    - pulls images from ECR
+    - writes logs to CloudWatch
 - ECS Task Role:
-  - writes traces to X-Ray
+    - writes traces to X-Ray
 
 ### Secrets Management
 - Database password stored in AWS Secrets Manager
@@ -170,13 +171,13 @@ Additional features:
 ### Authentication and Authorization
 - Cognito handles authentication
 - API Gateway validates JWT tokens
-- Application enforces issuer and client ID validation 
+- Application enforces issuer and client ID validation
 
 ### Web Application Firewall (WAF)
 - Attached to ALB
 - Protects against:
-  - common web exploits (AWS Managed Rules)
-  - excessive request rates (rate limiting)
+    - common web exploits (AWS Managed Rules)
+    - excessive request rates (rate limiting)
 
 ## Observability
 The system includes multiple observability layers:
@@ -188,7 +189,7 @@ The system includes multiple observability layers:
 
 ### Metrics
 - ECS CPU and memory utilization
-- EC2 instance metrics
+- ECS task / service metrics
 - ALB request and error metrics
 
 ### Alarms
@@ -206,17 +207,17 @@ The system includes multiple observability layers:
 - ALB distributes traffic across tasks
 - Health checks ensure only healthy tasks receive traffic
 - ECS rolling deployments:
-  - minHealthyPercent = 100
-  - maxHealthyPercent = 200
+    - minHealthyPercent = 100
+    - maxHealthyPercent = 200
 - Deployment safety:
-  - circuit breaker with rollback
-  - deployment alarms
+    - circuit breaker with rollback
+    - deployment alarms
 - Auto Scaling:
-  - CPU-based scaling
-  - memory-based scaling
+    - CPU-based scaling
+    - memory-based scaling
 - Graceful shutdown:
-  - container stop timeout
-  - ECS managed draining
+    - container stop timeout
+    - ECS managed draining
 
 ## Design Decisions and Tradeoffs
 
@@ -237,13 +238,13 @@ Chosen: Internal ALB behind API Gateway
 Reason:
 - private backend services
 - separation of concerns
-- better security boundaries 
+- better security boundaries
 
 ### NAT Gateway vs VPC Endpoints
 Chosen: NAT Gateway
 
 Reason:
-- cost optimization 
+- cost optimization
 
 ## Known Limitations
 - Removal policies are destructive (demo-friendly, not production-safe)
@@ -251,7 +252,7 @@ Reason:
 - No custom domain
 - Limited WAF rule set
 - No external APM (e.g., Datadog/New Relic)
-- Swagger endpoints exposed without additional restrictions 
+- Swagger endpoints exposed without additional restrictions
 
 ## Future Improvements
 - Add CI/CD pipeline (e.g., GitHub Actions)

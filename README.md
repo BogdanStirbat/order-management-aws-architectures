@@ -25,4 +25,15 @@ All details can be found in the project folder: [02-ecs-ec2](02-ecs-ec2)
 
 # Architecture 3: Deployed on ECS using the Fargate launch type.
 
+The application runs on ECS with Fargate Launch Type.
+
+Architecture diagram:
+
+![Architecture Diagram](03-ecs-fargate/docs/diagrams/architecture.png)
+
+All details can be found in the project folder: [03-ecs-fargate](03-ecs-fargate)
+
 # Architecture 4: Serverless architecture.
+
+
+I intentionally excluded EKS from this comparison because Kubernetes introduces a different axis (platform complexity vs deployment model).

@@ -10,7 +10,7 @@ The deployment consists of:
 
 ## Prerequisites
 
-Before deploying, you need the following: 
+Before deploying, you need the following:
 
 ### AWS Setup
 
@@ -22,28 +22,28 @@ Before deploying, you need the following:
 - AWS CLI (configured above)
 - Node.js (>= 18)
 - AWS CDK (`npm install -g aws-cdk`)
-- Docker 
+- Docker
 
-## Deployment procedure 
+## Deployment procedure
 
-### Step 0. 
-- clone the repository 
+### Step 0.
+- clone the repository
 - go to the cdk folder
 
 ### Step 1. Bootstrap CDK (if not already done)
 
 `cdk bootstrap aws://<ACCOUNT_ID>/<REGION>`
 
-### Step 2. Install dependencies 
+### Step 2. Install dependencies
 
 `npm install`
 
-### Step 3. Deploy ECR repositories 
+### Step 3. Deploy ECR repositories
 
 `cdk deploy OrdersApp-EcrRepository`
 
 After deployment, note the repository URI's:
-- `<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/orders-app-ecsec2`
+- `<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/orders-app-fargate`
 - `<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/adot`
 
 ### Step 4. Authenticate Docker to ECR
@@ -60,23 +60,23 @@ aws ecr get-login-password \
 ### Step 5. Build Docker images
 
 #### Application Image
-1. Go the `app/ecsec2` folder.
-2. Run `docker build -t ecsec2:latest .`
+1. Go the `app/ecsfargate` folder.
+2. Run `docker build -t ecsfargate:latest .`
 
 #### ADOT collector image
 1. Go to the `cdk/adot` folder.
 2. Run `docker build -t adot-collector:latest .`
-3. Return to the `cdk/` folder. 
+3. Return to the `cdk/` folder.
 
 ### Step 6. Tag images for ECR
 
-`docker tag ecsec2:latest <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/orders-app-ecsec2:latest`
+`docker tag ecsfargate:latest <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/orders-app-ecsfargate:latest`
 
 `docker tag adot-collector:latest <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/adot:latest`
 
 ### Step 7. Push images to ECR
 
-`docker push <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/orders-app-ecsec2:latest`
+`docker push <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/orders-app-ecsfargate:latest`
 
 `docker push <ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/adot:latest`
 
@@ -93,7 +93,7 @@ cdk deploy OrdersApp-Network \
 ```
 
 After the ECS stack is deployed, the following should happen:
-- ECS cluster will start EC2 instances
+- ECS cluster will run tasks using AWS Fargate, without provisioning or managing EC2 instances
 - ECS service will launch application tasks
 
 ### Step 9. Verify deployment
@@ -101,24 +101,24 @@ After the ECS stack is deployed, the following should happen:
 #### ECS
 - Go to ECS → Cluster
 - Verify:
-  - Service is running
-  - Desired tasks = running tasks
+    - Service is running
+    - Desired tasks = running tasks
 
 #### ALB
 - Check target group:
-  - Targets should be healthy
+    - Targets should be healthy
 
 #### Logs
 - Check CloudWatch Logs:
-  - `/ecs/<stack-name>/app`
-  - `/ecs/<stack-name>/adot`
+    - `/ecs/<stack-name>/app`
+    - `/ecs/<stack-name>/adot`
 
 ### Step 10. Test the API
 
 Go to AWS Console -> Cognito. Go to the created user pool.
 Note the following:
- - `USER_POOL_ID`
- - `USER_POOL_CLIENT_ID`
+- `USER_POOL_ID`
+- `USER_POOL_CLIENT_ID`
 
 Create a Cognito user.
 ```
@@ -149,7 +149,7 @@ aws cognito-idp initiate-auth \
   --auth-parameters USERNAME=demo@example.com,PASSWORD='DemoPassw0rd!'
 ```
 
-Call API Gateway 
+Call API Gateway
 
 ```
 curl -H "Authorization: Bearer <JWT access token>" \ https://<api-id>.execute-api.<region>.amazonaws.com/orders
@@ -162,31 +162,24 @@ Verify the following:
 
 ### Step 11. Verify database interaction
 - Check application logs for:
-  - successful DB connections
-  - Flyway migrations
+    - successful DB connections
+    - Flyway migrations
 - Validate API endpoints that read/write data
 
 ### Step 12. Verify observability
 #### Logs
 - CloudWatch Logs should contain application output
-#### Metrics 
+#### Metrics
 - CloudWatch → ECS / EC2 / ALB metrics
 #### Tracing
-- X-Ray → Service map and traces 
+- X-Ray → Service map and traces
 
 ### Step 13. Cleanup
 
-The deployed AWS resources cost money. 
+The deployed AWS resources cost money.
 
 To clean all resources, run the following command:
 `cdk destroy --all`
-
-#### Notes
-ECS stack deletion may take time due to:
-- task draining
-- EC2 instance termination
-
-If needed, manually terminate EC2 instances to accelerate deletion
 
 ## Optional Configuration Overrides
 
@@ -223,7 +216,7 @@ You can find more information in the `cdk/lib/config.ts` file.
 
 This deployment creates a fully functional backend system with:
 - secure authentication (Cognito)
-- scalable compute (ECS with EC2 Launch Type)
+- scalable compute (ECS with Fargate Launch Type)
 - private networking
 - managed database (RDS)
 - observability (CloudWatch + X-Ray)
