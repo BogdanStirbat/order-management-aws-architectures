@@ -37,8 +37,12 @@ public class OrderService {
   }
 
   public List<Order> listOrders(OrderStatus status, int page, int size) throws SQLException {
-    int safePage = Math.max(page, 0);
-    int safeSize = Math.min(Math.max(size, 1), 100);
-    return repository.findAll(status, safeSize, safePage * safeSize);
+    if (page < 0) {
+      throw new IllegalArgumentException("page must be greater than or equal to 0");
+    }
+    if (size < 1 || size > 100) {
+      throw new IllegalArgumentException("size must be between 1 and 100");
+    }
+    return repository.findAll(status, size, page * size);
   }
 }
