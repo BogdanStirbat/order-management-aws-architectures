@@ -67,7 +67,7 @@ export const handler = async (event: Event) => {
     await applyPendingMigrations(client, migrations);
 
     return {
-      PhysicalResourceId: `orders-db-migrations-${props.MigrationsHash}`
+      PhysicalResourceId: "orders-db-migrations"
     };
   } finally {
     await client.end();

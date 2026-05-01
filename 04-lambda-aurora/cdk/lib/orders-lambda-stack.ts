@@ -216,7 +216,7 @@ export class OrdersLambdaStack extends Stack {
         DbHost: proxy.endpoint,
         DbPort: "5432",
         DbName: dbName,
-        MigrationsSql: migrationsJson,
+        MigrationsJson: migrationsJson,
         MigrationsHash: migrationsHash
       }
     });
