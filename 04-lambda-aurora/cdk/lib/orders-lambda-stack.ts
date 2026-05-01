@@ -14,6 +14,45 @@ import * as apigw from "aws-cdk-lib/aws-apigateway";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as cr from "aws-cdk-lib/custom-resources";
 
+type MigrationFile = {
+  version: number;
+  description: string;
+  filename: string;
+  sql: string;
+  checksum: string;
+};
+
+function loadMigrations(migrationDir: string): MigrationFile[] {
+  return fs
+    .readdirSync(migrationDir)
+    .filter((file) => /^V\d+__.+\.sql$/.test(file))
+    .map((filename) => {
+      const match = filename.match(/^V(\d+)__(.+)\.sql$/);
+
+      if (!match) {
+        throw new Error(`Invalid migration filename: ${filename}`);
+      }
+
+      const version = Number(match[1]);
+      const description = match[2].replace(/_/g, " ");
+      const sql = fs.readFileSync(path.join(migrationDir, filename), "utf8");
+
+      const checksum = crypto
+        .createHash("sha256")
+        .update(sql)
+        .digest("hex");
+
+      return {
+        version,
+        description,
+        filename,
+        sql,
+        checksum
+      };
+    })
+    .sort((a, b) => a.version - b.version);
+}
+
 export class OrdersLambdaStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
@@ -133,16 +172,14 @@ export class OrdersLambdaStack extends Stack {
     const proxyResource = api.root.addResource("{proxy+}");
     proxyResource.addMethod("ANY", lambdaIntegration);
 
-    const migrationSqlPath = path.join(
-      __dirname,
-      "../migration/V1__create_orders_table.sql"
-    );
+    const migrationDir = path.join(__dirname, "../migration");
+    const migrations = loadMigrations(migrationDir);
 
-    const migrationSql = fs.readFileSync(migrationSqlPath, "utf8");
+    const migrationsJson = JSON.stringify(migrations);
 
-    const migrationHash = crypto
+    const migrationsHash = crypto
       .createHash("sha256")
-      .update(migrationSql)
+      .update(migrationsJson)
       .digest("hex");
 
     const migrationFunction = new lambdaNodejs.NodejsFunction(this, "MigrationFunction", {
@@ -179,8 +216,8 @@ export class OrdersLambdaStack extends Stack {
         DbHost: proxy.endpoint,
         DbPort: "5432",
         DbName: dbName,
-        MigrationSql: migrationSql,
-        MigrationHash: migrationHash
+        MigrationsSql: migrationsJson,
+        MigrationsHash: migrationsHash
       }
     });
 

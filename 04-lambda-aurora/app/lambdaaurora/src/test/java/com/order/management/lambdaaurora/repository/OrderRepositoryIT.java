@@ -45,7 +45,7 @@ public class OrderRepositoryIT {
       String migrationSql = new String(
           getClass()
               .getClassLoader()
-              .getResourceAsStream("db/migration/create_orders_table.sql")
+              .getResourceAsStream("db/migration/V1__create_orders_table.sql")
               .readAllBytes(),
           StandardCharsets.UTF_8
       );
