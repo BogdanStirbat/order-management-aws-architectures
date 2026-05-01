@@ -21,18 +21,43 @@ export interface MigrationConstructProps {
   dbName: string;
 }
 
-function loadMigrations(dir: string) {
+type MigrationFile = {
+  version: number;
+  description: string;
+  filename: string;
+  sql: string;
+  checksum: string;
+};
+
+function loadMigrations(migrationDir: string): MigrationFile[] {
   return fs
-    .readdirSync(dir)
-    .filter((f) => /^V\d+__.+\.sql$/.test(f))
+    .readdirSync(migrationDir)
+    .filter((file) => /^V\d+__.+\.sql$/.test(file))
     .map((filename) => {
-      const sql = fs.readFileSync(path.join(dir, filename), "utf8");
+      const match = filename.match(/^V(\d+)__(.+)\.sql$/);
+
+      if (!match) {
+        throw new Error(`Invalid migration filename: ${filename}`);
+      }
+
+      const version = Number(match[1]);
+      const description = match[2].replace(/_/g, " ");
+      const sql = fs.readFileSync(path.join(migrationDir, filename), "utf8");
+
+      const checksum = crypto
+        .createHash("sha256")
+        .update(sql)
+        .digest("hex");
+
       return {
+        version,
+        description,
         filename,
         sql,
-        checksum: crypto.createHash("sha256").update(sql).digest("hex")
+        checksum
       };
-    });
+    })
+    .sort((a, b) => a.version - b.version);
 }
 
 export class MigrationConstruct extends Construct {
