@@ -27,7 +27,7 @@ export class LambdaConstruct extends Construct {
       functionName: "orders-api-lambda",
       runtime: lambda.Runtime.JAVA_21,
       architecture: lambda.Architecture.ARM_64,
-      handler: "com.order.management.orderslambda.OrdersApiHandler::handleRequest",
+      handler: "com.order.management.lambdaaurora.OrdersApiHandler::handleRequest",
       code: lambda.Code.fromAsset(
         path.join(__dirname, "../../../orders-lambda/target/orders-lambda-1.0.0.jar")
       ),
