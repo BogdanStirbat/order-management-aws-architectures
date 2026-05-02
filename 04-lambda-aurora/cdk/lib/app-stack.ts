@@ -6,6 +6,7 @@ import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as rds from "aws-cdk-lib/aws-rds";
 
 import { LambdaConstruct } from "./constructs/lambda-construct";
+import { CognitoConstruct } from "./constructs/cognito-construct";
 import { ApiConstruct } from "./constructs/api-construct";
 import { MigrationConstruct } from "./constructs/migration-construct";
 
@@ -46,10 +47,17 @@ export class AppStack extends Stack {
     });
 
     //
-    // 3. API Gateway
+    // 3. Cognito
+    //
+    const cognito = new CognitoConstruct(this, "OrdersCognito");
+
+    //
+    // 4. API Gateway
     //
     const api = new ApiConstruct(this, "OrdersApi", {
-      ordersFunction: lambda.function
+      ordersFunction: lambda.function,
+      userPool: cognito.userPool,
+      userPoolClient: cognito.userPoolClient
     });
 
     //
