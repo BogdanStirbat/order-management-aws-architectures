@@ -29,7 +29,7 @@ export class LambdaConstruct extends Construct {
       architecture: lambda.Architecture.ARM_64,
       handler: "com.order.management.lambdaaurora.OrdersApiHandler::handleRequest",
       code: lambda.Code.fromAsset(
-        path.join(__dirname, "../../../orders-lambda/target/orders-lambda-1.0.0.jar")
+        path.resolve("../lambdaaurora/target/lambdaaurora-1.0.0.jar")
       ),
       memorySize: 1024,
       timeout: Duration.seconds(30),
