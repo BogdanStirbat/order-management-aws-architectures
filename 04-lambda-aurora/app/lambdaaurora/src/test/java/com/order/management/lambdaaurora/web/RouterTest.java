@@ -8,8 +8,8 @@ import static org.mockito.Mockito.when;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
 import com.order.management.lambdaaurora.model.Order;
 import com.order.management.lambdaaurora.model.OrderStatus;
 import com.order.management.lambdaaurora.service.OrderService;
@@ -42,19 +42,17 @@ public class RouterTest {
 
     when(service.createOrder(new BigDecimal("49.99"))).thenReturn(created);
 
-    APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-        .withHttpMethod("POST")
-        .withPath("/orders")
-        .withBody("""
-            {
-              "totalAmount": 49.99
-            }
-            """);
+    APIGatewayV2HTTPEvent request = request("POST", "/orders");
+    request.setBody("""
+        {
+          "totalAmount": 49.99
+        }
+        """);
 
     Context context = mock(Context.class);
 
     // when
-    APIGatewayProxyResponseEvent response = router.route(request, context);
+    APIGatewayV2HTTPResponse response = router.route(request, context);
 
     // then
     assertEquals(201, response.getStatusCode());
@@ -68,14 +66,12 @@ public class RouterTest {
   void route_returns400_whenPostOrdersWithInvalidBody() throws Exception {
 
     // given
-    APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-        .withHttpMethod("POST")
-        .withPath("/orders")
-        .withBody("""
-            {
-              "totalAmount": -10.00
-            }
-            """);
+    APIGatewayV2HTTPEvent request = request("POST", "/orders");
+    request.setBody("""
+        {
+          "totalAmount": -10.00
+        }
+        """);
 
     when(service.createOrder(new BigDecimal("-10.00")))
         .thenThrow(new IllegalArgumentException("totalAmount must be positive"));
@@ -83,7 +79,7 @@ public class RouterTest {
     Context context = mock(Context.class);
 
     // when
-    APIGatewayProxyResponseEvent response = router.route(request, context);
+    APIGatewayV2HTTPResponse response = router.route(request, context);
 
     // then
     assertEquals(400, response.getStatusCode());
@@ -97,14 +93,12 @@ public class RouterTest {
 
     when(service.getOrder(1L)).thenReturn(order);
 
-    APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-        .withHttpMethod("GET")
-        .withPath("/orders/1");
+    APIGatewayV2HTTPEvent request = request("GET", "/orders/1");
 
     Context context = mock(Context.class);
 
     // when
-    APIGatewayProxyResponseEvent response = router.route(request, context);
+    APIGatewayV2HTTPResponse response = router.route(request, context);
 
     // then
     assertEquals(200, response.getStatusCode());
@@ -119,14 +113,12 @@ public class RouterTest {
     when(service.getOrder(99L))
         .thenThrow(new OrderNotFoundException("Order not found: 99"));
 
-    APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-        .withHttpMethod("GET")
-        .withPath("/orders/99");
+    APIGatewayV2HTTPEvent request = request("GET", "/orders/99");
 
     Context context = mock(Context.class);
 
     // when
-    APIGatewayProxyResponseEvent response = router.route(request, context);
+    APIGatewayV2HTTPResponse response = router.route(request, context);
 
     // then
     assertEquals(404, response.getStatusCode());
@@ -140,14 +132,12 @@ public class RouterTest {
 
     when(service.cancelOrder(1L)).thenReturn(cancelled);
 
-    APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-        .withHttpMethod("PUT")
-        .withPath("/orders/1/cancel");
+    APIGatewayV2HTTPEvent request = request("PUT", "/orders/1/cancel");
 
     Context context = mock(Context.class);
 
     // when
-    APIGatewayProxyResponseEvent response = router.route(request, context);
+    APIGatewayV2HTTPResponse response = router.route(request, context);
 
     // then
     assertEquals(200, response.getStatusCode());
@@ -162,14 +152,12 @@ public class RouterTest {
     when(service.cancelOrder(99L))
         .thenThrow(new OrderNotFoundException("Order not found: 99"));
 
-    APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-        .withHttpMethod("PUT")
-        .withPath("/orders/99/cancel");
+    APIGatewayV2HTTPEvent request = request("PUT", "/orders/99/cancel");
 
     Context context = mock(Context.class);
 
     // when
-    APIGatewayProxyResponseEvent response = router.route(request, context);
+    APIGatewayV2HTTPResponse response = router.route(request, context);
 
     // then
     assertEquals(404, response.getStatusCode());
@@ -186,14 +174,12 @@ public class RouterTest {
 
     when(service.listOrders(null, 0, 20)).thenReturn(orders);
 
-    APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-        .withHttpMethod("GET")
-        .withPath("/orders");
+    APIGatewayV2HTTPEvent request = request("GET", "/orders");
 
     Context context = mock(Context.class);
 
     // when
-    APIGatewayProxyResponseEvent response = router.route(request, context);
+    APIGatewayV2HTTPResponse response = router.route(request, context);
 
     // then
     assertEquals(200, response.getStatusCode());
@@ -211,19 +197,17 @@ public class RouterTest {
 
     when(service.listOrders(OrderStatus.CREATED, 2, 10)).thenReturn(orders);
 
-    APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-        .withHttpMethod("GET")
-        .withPath("/orders")
-        .withQueryStringParameters(Map.of(
-            "status", "CREATED",
-            "page", "2",
-            "size", "10"
-        ));
+    APIGatewayV2HTTPEvent request = request("GET", "/orders");
+    request.setQueryStringParameters(Map.of(
+        "status", "CREATED",
+        "page", "2",
+        "size", "10"
+    ));
 
     Context context = mock(Context.class);
 
     // when
-    APIGatewayProxyResponseEvent response = router.route(request, context);
+    APIGatewayV2HTTPResponse response = router.route(request, context);
 
     // then
     assertEquals(200, response.getStatusCode());
@@ -235,15 +219,13 @@ public class RouterTest {
   void route_returns400_whenListOrdersWithInvalidStatus() {
 
     // given
-    APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-        .withHttpMethod("GET")
-        .withPath("/orders")
-        .withQueryStringParameters(Map.of("status", "INVALID"));
+    APIGatewayV2HTTPEvent request = request("GET", "/orders");
+    request.setQueryStringParameters(Map.of("status", "INVALID"));
 
     Context context = mock(Context.class);
 
     // when
-    APIGatewayProxyResponseEvent response = router.route(request, context);
+    APIGatewayV2HTTPResponse response = router.route(request, context);
 
     // then
     assertEquals(400, response.getStatusCode());
@@ -253,14 +235,12 @@ public class RouterTest {
   void route_returns404_whenUnknownPath() {
 
     // given
-    APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-        .withHttpMethod("GET")
-        .withPath("/unknown");
+    APIGatewayV2HTTPEvent request = request("GET", "/unknown");
 
     Context context = mock(Context.class);
 
     // when
-    APIGatewayProxyResponseEvent response = router.route(request, context);
+    APIGatewayV2HTTPResponse response = router.route(request, context);
 
     // then
     assertEquals(404, response.getStatusCode());
@@ -272,16 +252,14 @@ public class RouterTest {
     // given
     when(service.getOrder(1L)).thenThrow(new SQLException("database down"));
 
-    APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-        .withHttpMethod("GET")
-        .withPath("/orders/1");
+    APIGatewayV2HTTPEvent request = request("GET", "/orders/1");
 
     LambdaLogger logger = mock(LambdaLogger.class);
     Context context = mock(Context.class);
     when(context.getLogger()).thenReturn(logger);
 
     // when
-    APIGatewayProxyResponseEvent response = router.route(request, context);
+    APIGatewayV2HTTPResponse response = router.route(request, context);
 
     // then
     assertEquals(500, response.getStatusCode());
@@ -295,18 +273,34 @@ public class RouterTest {
 
     when(service.getOrder(1L)).thenReturn(order);
 
-    APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-        .withHttpMethod("GET")
-        .withPath("/orders/1/");
+    APIGatewayV2HTTPEvent request = request("GET", "/orders/1/");
 
     Context context = mock(Context.class);
 
     // when
-    APIGatewayProxyResponseEvent response = router.route(request, context);
+    APIGatewayV2HTTPResponse response = router.route(request, context);
 
     // then
     assertEquals(200, response.getStatusCode());
     verify(service).getOrder(1L);
+  }
+
+  private static APIGatewayV2HTTPEvent request(String method, String path) {
+    APIGatewayV2HTTPEvent event = new APIGatewayV2HTTPEvent();
+
+    APIGatewayV2HTTPEvent.RequestContext requestContext =
+        new APIGatewayV2HTTPEvent.RequestContext();
+
+    APIGatewayV2HTTPEvent.RequestContext.Http http =
+        new APIGatewayV2HTTPEvent.RequestContext.Http();
+
+    http.setMethod(method);
+    http.setPath(path);
+
+    requestContext.setHttp(http);
+    event.setRequestContext(requestContext);
+
+    return event;
   }
 
   private static Order order(Long id, OrderStatus status, BigDecimal totalAmount) {

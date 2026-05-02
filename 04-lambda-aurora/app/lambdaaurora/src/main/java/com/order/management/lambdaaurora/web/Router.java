@@ -1,8 +1,8 @@
 package com.order.management.lambdaaurora.web;
 
 import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.order.management.lambdaaurora.model.Order;
@@ -25,10 +25,14 @@ public class Router {
     this.service = service;
   }
 
-  public APIGatewayProxyResponseEvent route(APIGatewayProxyRequestEvent event, Context context) {
+  public APIGatewayV2HTTPResponse route(APIGatewayV2HTTPEvent event, Context context) {
     try {
-      String method = event.getHttpMethod();
-      String path = normalizePath(event.getPath());
+      String method = event
+          .getRequestContext()
+          .getHttp()
+          .getMethod();
+      String rawPath = event.getRequestContext().getHttp().getPath();
+      String path = normalizePath(rawPath);
 
       if ("POST".equals(method) && "/orders".equals(path)) {
         CreateOrderRequest request = MAPPER.readValue(event.getBody(), CreateOrderRequest.class);
