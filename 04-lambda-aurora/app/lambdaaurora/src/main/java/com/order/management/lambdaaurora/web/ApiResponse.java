@@ -1,23 +1,18 @@
 package com.order.management.lambdaaurora.web;
 
-import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.order.management.lambdaaurora.web.dto.http.HttpResponse;
 import java.util.HashMap;
 import java.util.Map;
 
 public class ApiResponse {
 
-  private static final ObjectMapper MAPPER = new ObjectMapper()
-      .registerModule(new JavaTimeModule());
-
   private ApiResponse() {}
 
-  public static APIGatewayV2HTTPResponse json(int statusCode, Object body) {
+  public static HttpResponse json(int statusCode, Object body) {
     return json(statusCode, body, Map.of());
   }
 
-  public static APIGatewayV2HTTPResponse json(
+  public static HttpResponse json(
       int statusCode,
       Object body,
       Map<String, String> extraHeaders
@@ -26,21 +21,19 @@ public class ApiResponse {
       Map<String, String> headers = new HashMap<>();
       headers.put("Content-Type", "application/json");
       headers.put("Cache-Control", "no-store");
-      headers.putAll(extraHeaders);
 
-      APIGatewayV2HTTPResponse response = new APIGatewayV2HTTPResponse();
-      response.setStatusCode(statusCode);
-      response.setHeaders(headers);
-      response.setBody(MAPPER.writeValueAsString(body));
+      if (extraHeaders != null) {
+        headers.putAll(extraHeaders);
+      }
 
-      return response;
+      return new HttpResponse(statusCode, body, headers);
 
     } catch (Exception ex) {
       return error(500, "Failed to serialize response");
     }
   }
 
-  public static APIGatewayV2HTTPResponse error(int statusCode, String message) {
+  public static HttpResponse error(int statusCode, String message) {
     return json(statusCode, Map.of("message", message));
   }
 }

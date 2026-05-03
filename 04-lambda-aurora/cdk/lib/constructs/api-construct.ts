@@ -21,7 +21,10 @@ export class ApiConstruct extends Construct {
 
     const integration = new integrations.HttpLambdaIntegration(
       "OrdersLambdaIntegration",
-      props.ordersFunction
+      props.ordersFunction,
+      {
+        payloadFormatVersion: apigwv2.PayloadFormatVersion.VERSION_2_0,
+      }
     );
 
     const authorizer = new authorizers.HttpUserPoolAuthorizer(

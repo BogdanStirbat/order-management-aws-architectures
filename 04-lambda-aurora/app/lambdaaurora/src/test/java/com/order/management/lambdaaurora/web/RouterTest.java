@@ -2,18 +2,17 @@ package com.order.management.lambdaaurora.web;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.LambdaLogger;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.order.management.lambdaaurora.model.Order;
 import com.order.management.lambdaaurora.model.OrderStatus;
 import com.order.management.lambdaaurora.service.OrderService;
 import com.order.management.lambdaaurora.service.exception.OrderNotFoundException;
+import com.order.management.lambdaaurora.web.dto.http.HttpRequest;
+import com.order.management.lambdaaurora.web.dto.http.HttpResponse;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -28,6 +27,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 public class RouterTest {
 
+  private static final ObjectMapper MAPPER = new ObjectMapper()
+      .registerModule(new JavaTimeModule());
+
   @Mock
   private OrderService service;
 
@@ -39,50 +41,72 @@ public class RouterTest {
 
     // given
     Order created = order(1L, OrderStatus.CREATED, new BigDecimal("49.99"));
-
     when(service.createOrder(new BigDecimal("49.99"))).thenReturn(created);
-
-    APIGatewayV2HTTPEvent request = request("POST", "/orders");
-    request.setBody("""
+    HttpRequest request = request("POST", "/orders", null, """
         {
           "totalAmount": 49.99
         }
         """);
 
-    Context context = mock(Context.class);
-
     // when
-    APIGatewayV2HTTPResponse response = router.route(request, context);
+    HttpResponse response = router.route(request);
 
     // then
-    assertEquals(201, response.getStatusCode());
-    assertEquals("/orders/1", response.getHeaders().get("Location"));
-    assertTrue(response.getBody().contains("\"id\":1"));
-    assertTrue(response.getBody().contains("\"status\":\"CREATED\""));
-    assertTrue(response.getBody().contains("\"totalAmount\":49.99"));
+    assertEquals(201, response.statusCode());
+    assertEquals("/orders/1", response.headers().get("Location"));
+
+    String body = json(response.body());
+    assertTrue(body.contains("\"id\":1"));
+    assertTrue(body.contains("\"status\":\"CREATED\""));
+    assertTrue(body.contains("\"totalAmount\":49.99"));
   }
 
   @Test
   void route_returns400_whenPostOrdersWithInvalidBody() throws Exception {
 
     // given
-    APIGatewayV2HTTPEvent request = request("POST", "/orders");
-    request.setBody("""
+    HttpRequest request = request("POST", "/orders", null, """
         {
           "totalAmount": -10.00
         }
         """);
-
     when(service.createOrder(new BigDecimal("-10.00")))
         .thenThrow(new IllegalArgumentException("totalAmount must be positive"));
 
-    Context context = mock(Context.class);
-
     // when
-    APIGatewayV2HTTPResponse response = router.route(request, context);
+    HttpResponse response = router.route(request);
 
     // then
-    assertEquals(400, response.getStatusCode());
+    assertEquals(400, response.statusCode());
+    assertTrue(json(response.body()).contains("totalAmount must be positive"));
+  }
+
+  @Test
+  void route_returns400_whenPostOrdersWithoutBody() {
+
+    // given
+    HttpRequest request = request("POST", "/orders", null, null);
+
+    // when
+    HttpResponse response = router.route(request);
+
+    // then
+    assertEquals(400, response.statusCode());
+    assertTrue(response.body().toString().contains("Request body is required"));
+  }
+
+  @Test
+  void route_returns400_whenPostOrdersWithMalformedJson() {
+
+    // given
+    HttpRequest request = request("POST", "/orders", null, "{");
+
+    // when
+    HttpResponse response = router.route(request);
+
+    // then
+    assertEquals(400, response.statusCode());
+    assertTrue(response.body().toString().contains("Malformed JSON request body"));
   }
 
   @Test
@@ -90,20 +114,17 @@ public class RouterTest {
 
     // given
     Order order = order(1L, OrderStatus.CREATED, new BigDecimal("25.00"));
-
     when(service.getOrder(1L)).thenReturn(order);
 
-    APIGatewayV2HTTPEvent request = request("GET", "/orders/1");
-
-    Context context = mock(Context.class);
-
     // when
-    APIGatewayV2HTTPResponse response = router.route(request, context);
+    HttpResponse response = router.route(request("GET", "/orders/1"));
 
     // then
-    assertEquals(200, response.getStatusCode());
-    assertTrue(response.getBody().contains("\"id\":1"));
-    assertTrue(response.getBody().contains("\"status\":\"CREATED\""));
+    assertEquals(200, response.statusCode());
+
+    String body = json(response.body());
+    assertTrue(body.contains("\"id\":1"));
+    assertTrue(body.contains("\"status\":\"CREATED\""));
   }
 
   @Test
@@ -113,15 +134,11 @@ public class RouterTest {
     when(service.getOrder(99L))
         .thenThrow(new OrderNotFoundException("Order not found: 99"));
 
-    APIGatewayV2HTTPEvent request = request("GET", "/orders/99");
-
-    Context context = mock(Context.class);
-
     // when
-    APIGatewayV2HTTPResponse response = router.route(request, context);
+    HttpResponse response = router.route(request("GET", "/orders/99"));
 
     // then
-    assertEquals(404, response.getStatusCode());
+    assertEquals(404, response.statusCode());
   }
 
   @Test
@@ -129,20 +146,17 @@ public class RouterTest {
 
     // given
     Order cancelled = order(1L, OrderStatus.CANCELLED, new BigDecimal("100.00"));
-
     when(service.cancelOrder(1L)).thenReturn(cancelled);
 
-    APIGatewayV2HTTPEvent request = request("PUT", "/orders/1/cancel");
-
-    Context context = mock(Context.class);
-
     // when
-    APIGatewayV2HTTPResponse response = router.route(request, context);
+    HttpResponse response = router.route(request("PUT", "/orders/1/cancel"));
 
     // then
-    assertEquals(200, response.getStatusCode());
-    assertTrue(response.getBody().contains("\"id\":1"));
-    assertTrue(response.getBody().contains("\"status\":\"CANCELLED\""));
+    assertEquals(200, response.statusCode());
+
+    String body = json(response.body());
+    assertTrue(body.contains("\"id\":1"));
+    assertTrue(body.contains("\"status\":\"CANCELLED\""));
   }
 
   @Test
@@ -152,15 +166,11 @@ public class RouterTest {
     when(service.cancelOrder(99L))
         .thenThrow(new OrderNotFoundException("Order not found: 99"));
 
-    APIGatewayV2HTTPEvent request = request("PUT", "/orders/99/cancel");
-
-    Context context = mock(Context.class);
-
     // when
-    APIGatewayV2HTTPResponse response = router.route(request, context);
+    HttpResponse response = router.route(request("PUT", "/orders/99/cancel"));
 
     // then
-    assertEquals(404, response.getStatusCode());
+    assertEquals(404, response.statusCode());
   }
 
   @Test
@@ -171,20 +181,17 @@ public class RouterTest {
         order(1L, OrderStatus.CREATED, new BigDecimal("10.00")),
         order(2L, OrderStatus.CREATED, new BigDecimal("20.00"))
     );
-
     when(service.listOrders(null, 0, 20)).thenReturn(orders);
 
-    APIGatewayV2HTTPEvent request = request("GET", "/orders");
-
-    Context context = mock(Context.class);
-
     // when
-    APIGatewayV2HTTPResponse response = router.route(request, context);
+    HttpResponse response = router.route(request("GET", "/orders"));
 
     // then
-    assertEquals(200, response.getStatusCode());
-    assertTrue(response.getBody().contains("\"id\":1"));
-    assertTrue(response.getBody().contains("\"id\":2"));
+    assertEquals(200, response.statusCode());
+
+    String body = json(response.body());
+    assertTrue(body.contains("\"id\":1"));
+    assertTrue(body.contains("\"id\":2"));
   }
 
   @Test
@@ -194,56 +201,94 @@ public class RouterTest {
     List<Order> orders = List.of(
         order(1L, OrderStatus.CREATED, new BigDecimal("10.00"))
     );
-
     when(service.listOrders(OrderStatus.CREATED, 2, 10)).thenReturn(orders);
-
-    APIGatewayV2HTTPEvent request = request("GET", "/orders");
-    request.setQueryStringParameters(Map.of(
-        "status", "CREATED",
-        "page", "2",
-        "size", "10"
-    ));
-
-    Context context = mock(Context.class);
+    HttpRequest request = request(
+        "GET",
+        "/orders",
+        Map.of(
+            "status", "CREATED",
+            "page", "2",
+            "size", "10"
+        ),
+        null
+    );
 
     // when
-    APIGatewayV2HTTPResponse response = router.route(request, context);
+    HttpResponse response = router.route(request);
 
     // then
-    assertEquals(200, response.getStatusCode());
-    assertTrue(response.getBody().contains("\"id\":1"));
-    assertTrue(response.getBody().contains("\"status\":\"CREATED\""));
+    assertEquals(200, response.statusCode());
+
+    String body = json(response.body());
+    assertTrue(body.contains("\"id\":1"));
+    assertTrue(body.contains("\"status\":\"CREATED\""));
   }
 
   @Test
   void route_returns400_whenListOrdersWithInvalidStatus() {
 
     // given
-    APIGatewayV2HTTPEvent request = request("GET", "/orders");
-    request.setQueryStringParameters(Map.of("status", "INVALID"));
-
-    Context context = mock(Context.class);
+    HttpRequest request = request(
+        "GET",
+        "/orders",
+        Map.of("status", "INVALID"),
+        null
+    );
 
     // when
-    APIGatewayV2HTTPResponse response = router.route(request, context);
+    HttpResponse response = router.route(request);
 
     // then
-    assertEquals(400, response.getStatusCode());
+    assertEquals(400, response.statusCode());
+    assertTrue(response.body().toString().contains("status must be one of: CREATED, CANCELLED"));
+  }
+
+  @Test
+  void route_returns400_whenListOrdersWithInvalidPage() {
+
+    // given
+    HttpRequest request = request(
+        "GET",
+        "/orders",
+        Map.of("page", "abc"),
+        null
+    );
+
+    // when
+    HttpResponse response = router.route(request);
+
+    // then
+    assertEquals(400, response.statusCode());
+    assertTrue(response.body().toString().contains("page must be an integer"));
+  }
+
+  @Test
+  void route_returns400_whenListOrdersWithInvalidSize() {
+
+    // given
+    HttpRequest request = request(
+        "GET",
+        "/orders",
+        Map.of("size", "abc"),
+        null
+    );
+
+    // when
+    HttpResponse response = router.route(request);
+
+    // then
+    assertEquals(400, response.statusCode());
+    assertTrue(response.body().toString().contains("size must be an integer"));
   }
 
   @Test
   void route_returns404_whenUnknownPath() {
 
-    // given
-    APIGatewayV2HTTPEvent request = request("GET", "/unknown");
-
-    Context context = mock(Context.class);
-
     // when
-    APIGatewayV2HTTPResponse response = router.route(request, context);
+    HttpResponse response = router.route(request("GET", "/unknown"));
 
     // then
-    assertEquals(404, response.getStatusCode());
+    assertEquals(404, response.statusCode());
   }
 
   @Test
@@ -252,17 +297,11 @@ public class RouterTest {
     // given
     when(service.getOrder(1L)).thenThrow(new SQLException("database down"));
 
-    APIGatewayV2HTTPEvent request = request("GET", "/orders/1");
-
-    LambdaLogger logger = mock(LambdaLogger.class);
-    Context context = mock(Context.class);
-    when(context.getLogger()).thenReturn(logger);
-
     // when
-    APIGatewayV2HTTPResponse response = router.route(request, context);
+    HttpResponse response = router.route(request("GET", "/orders/1"));
 
     // then
-    assertEquals(500, response.getStatusCode());
+    assertEquals(500, response.statusCode());
   }
 
   @Test
@@ -270,37 +309,36 @@ public class RouterTest {
 
     // given
     Order order = order(1L, OrderStatus.CREATED, new BigDecimal("25.00"));
-
     when(service.getOrder(1L)).thenReturn(order);
 
-    APIGatewayV2HTTPEvent request = request("GET", "/orders/1/");
-
-    Context context = mock(Context.class);
-
     // when
-    APIGatewayV2HTTPResponse response = router.route(request, context);
+    HttpResponse response = router.route(request("GET", "/orders/1/"));
 
     // then
-    assertEquals(200, response.getStatusCode());
+    assertEquals(200, response.statusCode());
     verify(service).getOrder(1L);
   }
 
-  private static APIGatewayV2HTTPEvent request(String method, String path) {
-    APIGatewayV2HTTPEvent event = new APIGatewayV2HTTPEvent();
+  private static HttpRequest request(String method, String path) {
+    return request(method, path, Map.of(), null);
+  }
 
-    APIGatewayV2HTTPEvent.RequestContext requestContext =
-        new APIGatewayV2HTTPEvent.RequestContext();
+  private static HttpRequest request(
+      String method,
+      String path,
+      Map<String, String> query,
+      String body
+  ) {
+    return new HttpRequest(
+        method,
+        path,
+        query == null ? Map.of() : query,
+        body
+    );
+  }
 
-    APIGatewayV2HTTPEvent.RequestContext.Http http =
-        new APIGatewayV2HTTPEvent.RequestContext.Http();
-
-    http.setMethod(method);
-    http.setPath(path);
-
-    requestContext.setHttp(http);
-    event.setRequestContext(requestContext);
-
-    return event;
+  private static String json(Object value) throws Exception {
+    return MAPPER.writeValueAsString(value);
   }
 
   private static Order order(Long id, OrderStatus status, BigDecimal totalAmount) {

@@ -1,8 +1,6 @@
 package com.order.management.lambdaaurora.web;
 
-import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.order.management.lambdaaurora.model.Order;
@@ -11,6 +9,8 @@ import com.order.management.lambdaaurora.service.OrderService;
 import com.order.management.lambdaaurora.service.exception.OrderNotFoundException;
 import com.order.management.lambdaaurora.web.dto.CreateOrderRequest;
 import com.order.management.lambdaaurora.web.dto.OrderResponse;
+import com.order.management.lambdaaurora.web.dto.http.HttpRequest;
+import com.order.management.lambdaaurora.web.dto.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
 
@@ -25,18 +25,15 @@ public class Router {
     this.service = service;
   }
 
-  public APIGatewayV2HTTPResponse route(APIGatewayV2HTTPEvent event, Context context) {
+  public HttpResponse route(HttpRequest request) {
     try {
-      String method = event
-          .getRequestContext()
-          .getHttp()
-          .getMethod();
-      String rawPath = event.getRequestContext().getHttp().getPath();
-      String path = normalizePath(rawPath);
+      String method = request.method();
+      String path = normalizePath(request.path());
 
       if ("POST".equals(method) && "/orders".equals(path)) {
-        CreateOrderRequest request = MAPPER.readValue(event.getBody(), CreateOrderRequest.class);
-        Order created = service.createOrder(request.totalAmount());
+        CreateOrderRequest createOrderRequest = extractCreateOrderRequest(request);
+
+        Order created = service.createOrder(createOrderRequest.totalAmount());
 
         return ApiResponse.json(
             201,
@@ -57,15 +54,11 @@ public class Router {
       }
 
       if ("GET".equals(method) && "/orders".equals(path)) {
-        Map<String, String> qs = event.getQueryStringParameters();
+        Map<String, String> query = request.query();
 
-        OrderStatus status = null;
-        if (qs != null && qs.get("status") != null && !qs.get("status").isBlank()) {
-          status = OrderStatus.valueOf(qs.get("status"));
-        }
-
-        int page = parseInt(qs, "page", 0);
-        int size = parseInt(qs, "size", 20);
+        OrderStatus status = parseStatus(query);
+        int page = parseInt(query, "page", 0);
+        int size = parseInt(query, "size", 20);
 
         List<OrderResponse> orders = service.listOrders(status, page, size)
             .stream()
@@ -82,21 +75,76 @@ public class Router {
     } catch (OrderNotFoundException ex) {
       return ApiResponse.error(404, ex.getMessage());
     } catch (Exception ex) {
-      context.getLogger().log("Request failed: " + ex.getMessage());
       return ApiResponse.error(500, "Internal server error");
     }
   }
 
+  private String requiredBody(HttpRequest request) {
+    if (request.body() == null || request.body().isBlank()) {
+      throw new IllegalArgumentException("Request body is required");
+    }
+
+    return request.body();
+  }
+
+  private CreateOrderRequest extractCreateOrderRequest(HttpRequest request)  {
+
+    String body = requiredBody(request);
+
+    try {
+      return MAPPER.readValue(
+          body,
+          CreateOrderRequest.class
+      );
+    } catch (Exception e) {
+      throw new IllegalArgumentException("Malformed JSON request body");
+    }
+  }
+
+  private OrderStatus parseStatus(Map<String, String> query) {
+    String value = queryValue(query, "status");
+
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+
+    try {
+      return OrderStatus.valueOf(value);
+    } catch (IllegalArgumentException ex) {
+      throw new IllegalArgumentException("status must be one of: CREATED, CANCELLED");
+    }
+  }
+
+  private int parseInt(Map<String, String> query, String key, int fallback) {
+    String value = queryValue(query, key);
+
+    if (value == null || value.isBlank()) {
+      return fallback;
+    }
+
+    try {
+      return Integer.parseInt(value);
+    } catch (NumberFormatException ex) {
+      throw new IllegalArgumentException(key + " must be an integer");
+    }
+  }
+
+  private String queryValue(Map<String, String> query, String key) {
+    if (query == null) {
+      return null;
+    }
+
+    return query.get(key);
+  }
+
   private String normalizePath(String path) {
-    if (path == null || path.isBlank()) return "/";
+    if (path == null || path.isBlank()) {
+      return "/";
+    }
+
     return path.endsWith("/") && path.length() > 1
         ? path.substring(0, path.length() - 1)
         : path;
-  }
-
-  private int parseInt(Map<String, String> qs, String key, int fallback) {
-    if (qs == null || qs.get(key) == null) return fallback;
-    return Integer.parseInt(qs.get(key));
   }
 
   private OrderResponse toResponse(Order order) {
