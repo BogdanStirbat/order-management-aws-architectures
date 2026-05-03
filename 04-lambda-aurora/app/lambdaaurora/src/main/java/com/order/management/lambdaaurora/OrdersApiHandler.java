@@ -13,8 +13,17 @@ import com.order.management.lambdaaurora.web.dto.http.HttpResponse;
 
 public class OrdersApiHandler implements RequestHandler<APIGatewayV2HTTPEvent, APIGatewayV2HTTPResponse> {
 
-  private final Router router = RouterFactory.create();
-  private final ApiGatewayV2HttpAdapter adapter = new ApiGatewayV2HttpAdapter();
+  private final Router router;
+  private final ApiGatewayV2HttpAdapter adapter;
+
+  public OrdersApiHandler() {
+    this(RouterFactory.create(), new ApiGatewayV2HttpAdapter());
+  }
+
+  OrdersApiHandler(Router router, ApiGatewayV2HttpAdapter adapter) {
+    this.router = router;
+    this.adapter = adapter;
+  }
 
   @Override
   public APIGatewayV2HTTPResponse handleRequest(APIGatewayV2HTTPEvent event, Context context) {
