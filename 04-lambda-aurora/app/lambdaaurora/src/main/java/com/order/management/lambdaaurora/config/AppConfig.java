@@ -8,8 +8,7 @@ public record AppConfig(DbConfig db) {
             required("DB_HOST"),
             Integer.parseInt(optional("DB_PORT", "5432")),
             required("DB_NAME"),
-            required("DB_USERNAME"),
-            required("DB_PASSWORD")
+            required("DB_SECRET_ARN")
         )
     );
   }

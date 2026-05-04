@@ -4,8 +4,7 @@ public record DbConfig(
     String host,
     int port,
     String name,
-    String username,
-    String password
+    String secretArn
 ) {
 
 }

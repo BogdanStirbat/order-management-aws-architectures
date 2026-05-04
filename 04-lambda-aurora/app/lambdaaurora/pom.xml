@@ -11,6 +11,7 @@
     <maven.compiler.release>21</maven.compiler.release>
     <aws.lambda.java.core.version>1.4.0</aws.lambda.java.core.version>
     <aws.lambda.java.events.version>3.16.1</aws.lambda.java.events.version>
+    <aws.sdk.version>2.31.78</aws.sdk.version>
     <postgresql.version>42.7.10</postgresql.version>
     <jackson.version>2.21.2</jackson.version>
     <junit.version>5.14.3</junit.version>
@@ -29,6 +30,12 @@
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-lambda-java-events</artifactId>
       <version>${aws.lambda.java.events.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>secretsmanager</artifactId>
+      <version>${aws.sdk.version}</version>
     </dependency>
 
     <dependency>

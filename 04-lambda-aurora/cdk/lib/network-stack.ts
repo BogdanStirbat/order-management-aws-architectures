@@ -53,6 +53,10 @@ export class NetworkStack extends Stack {
       "PostgreSQL from RDS Proxy"
     );
 
+    this.vpc.addInterfaceEndpoint("SecretsManagerEndpoint", {
+      service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+    });
+
     new cdk.CfnOutput(this, "VpcId", {
       value: this.vpc.vpcId
     });

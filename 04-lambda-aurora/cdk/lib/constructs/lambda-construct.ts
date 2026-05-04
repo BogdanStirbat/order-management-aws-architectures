@@ -40,10 +40,7 @@ export class LambdaConstruct extends Construct {
         DB_HOST: proxy.endpoint,
         DB_PORT: "5432",
         DB_NAME: dbName,
-        DB_USERNAME: "postgres",
-        DB_PASSWORD: cluster.secret!
-          .secretValueFromJson("password")
-          .unsafeUnwrap()
+        DB_SECRET_ARN: cluster.secret!.secretArn,
       },
       logRetention: logs.RetentionDays.ONE_WEEK
     });
