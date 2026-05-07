@@ -6,6 +6,7 @@ import java.time.Instant;
 
 public record OrderResponse(
     Long id,
+    long version,
     OrderStatus status,
     BigDecimal totalAmount,
     Instant createdAt,
