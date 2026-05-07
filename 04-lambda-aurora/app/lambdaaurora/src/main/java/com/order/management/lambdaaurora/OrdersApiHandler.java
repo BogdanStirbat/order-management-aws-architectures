@@ -10,6 +10,8 @@ import com.order.management.lambdaaurora.web.RouterFactory;
 import com.order.management.lambdaaurora.web.adapter.ApiGatewayV2HttpAdapter;
 import com.order.management.lambdaaurora.web.dto.http.HttpRequest;
 import com.order.management.lambdaaurora.web.dto.http.HttpResponse;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 
 public class OrdersApiHandler implements RequestHandler<APIGatewayV2HTTPEvent, APIGatewayV2HTTPResponse> {
 
@@ -39,10 +41,16 @@ public class OrdersApiHandler implements RequestHandler<APIGatewayV2HTTPEvent, A
 
     } catch (Exception ex) {
       if (context != null && context.getLogger() != null) {
-        context.getLogger().log("Unhandled error: " + ex.getMessage());
+        context.getLogger().log("Unhandled error \n" + stackTraceToString(ex));
       }
 
       return adapter.toApiGatewayResponse(ApiResponse.error(500, "Internal server error"));
     }
+  }
+
+  private static String stackTraceToString(Throwable throwable) {
+    StringWriter sw = new StringWriter();
+    throwable.printStackTrace(new PrintWriter(sw));
+    return sw.toString();
   }
 }
