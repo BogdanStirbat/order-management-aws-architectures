@@ -3,6 +3,7 @@ package com.order.management.lambdaaurora.web.adapter;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.order.management.lambdaaurora.web.dto.http.HttpRequest;
 import com.order.management.lambdaaurora.web.dto.http.HttpResponse;
@@ -13,7 +14,8 @@ import java.util.Map;
 public class ApiGatewayV2HttpAdapter {
 
   private static final ObjectMapper MAPPER = new ObjectMapper()
-      .registerModule(new JavaTimeModule());
+      .registerModule(new JavaTimeModule())
+      .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
   public HttpRequest toHttpRequest(APIGatewayV2HTTPEvent event) {
     if (event == null) {
