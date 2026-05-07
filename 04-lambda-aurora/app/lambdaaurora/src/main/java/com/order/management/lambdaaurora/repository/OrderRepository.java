@@ -60,23 +60,46 @@ public class OrderRepository {
   }
 
   public Order cancel(long id) throws SQLException {
-    String sql = """
+    String updateSql = """
         UPDATE orders
         SET status = 'CANCELLED',
             version = version + 1,
             updated_at = now()
         WHERE id = ?
+            AND status = 'CREATED'
         RETURNING id, version, status, total_amount, created_at, updated_at
         """;
 
-    try (Connection conn = dataSource.getConnection();
-        PreparedStatement ps = conn.prepareStatement(sql)) {
+    String selectSql = """
+      SELECT id, version, status, total_amount, created_at, updated_at
+      FROM orders
+      WHERE id = ?
+      """;
 
-      ps.setLong(1, id);
+    try (Connection conn = dataSource.getConnection()) {
+      try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+        ps.setLong(1, id);
 
-      try (ResultSet rs = ps.executeQuery()) {
-        if (!rs.next()) return null;
-        return map(rs);
+        try (ResultSet rs = ps.executeQuery()) {
+          if (rs.next()) return map(rs);
+        }
+      }
+
+      // idempotency: if already cancelled, return the existing order without modifying it
+      try (PreparedStatement ps = conn.prepareStatement(selectSql)) {
+        ps.setLong(1, id);
+
+        try (ResultSet rs = ps.executeQuery()) {
+          if (!rs.next()) return null;
+
+          Order existing = map(rs);
+          if (existing.status() == OrderStatus.CANCELLED) return existing;
+
+          // avoid future bugs if non-cancelable statuses are added
+          throw new IllegalStateException(
+              "Order cannot be cancelled from status: " + existing.status()
+          );
+        }
       }
     }
   }
