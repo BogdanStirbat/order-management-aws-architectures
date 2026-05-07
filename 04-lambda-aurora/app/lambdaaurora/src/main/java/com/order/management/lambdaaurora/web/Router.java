@@ -150,7 +150,7 @@ public class Router {
   private OrderResponse toResponse(Order order) {
     return new OrderResponse(
         order.id(),
-        order.version(), 
+        order.version(),
         order.status(),
         order.totalAmount(),
         order.createdAt(),
