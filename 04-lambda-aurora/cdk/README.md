@@ -1,15 +1,3 @@
-1. Build Lambda JAR
-```
-cd ../orders-lambda
-mvn clean install
-```
-
-2. cdk deploy Network + Database
-3. cdk deploy App infrastructure containing ECS migration task definition
-4. Run ECS migration task
-5. Deploy/update Lambda/API
-6. Run smoke tests
-
 # Deployment procedure 
 
 ## First deployment (base infrastructure does not exists)
