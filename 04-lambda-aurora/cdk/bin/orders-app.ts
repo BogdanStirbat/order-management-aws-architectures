@@ -2,7 +2,10 @@
 import * as cdk from "aws-cdk-lib";
 import { NetworkStack } from "../lib/network-stack";
 import { DatabaseStack } from "../lib/database-stack";
-import { AppStack } from "../lib/app-stack";
+import { MigrationStack } from "../lib/migration-stack";
+import { LambdaStack } from "../lib/lambda-stack";
+import { CognitoStack } from "../lib/cognito-stack";
+import { ApiStack } from "../lib/api-stack";
 
 const app = new cdk.App();
 
@@ -20,7 +23,16 @@ const database = new DatabaseStack(app, "OrdersApp-Database", {
   proxySg: network.proxySg
 });
 
-const appStack = new AppStack(app, "OrdersApp-App", {
+const migration = new MigrationStack(app, "OrdersApp-Migration", {
+  env,
+  vpc: network.vpc,
+  migrationTaskSg: network.migrationTaskSg,
+  proxy: database.proxy,
+  cluster: database.cluster,
+  dbName: database.dbName,
+});
+
+const lambda = new LambdaStack(app, "OrdersApp-Lambda", {
   env,
   vpc: network.vpc,
   lambdaSg: network.lambdaSg,
@@ -28,3 +40,20 @@ const appStack = new AppStack(app, "OrdersApp-App", {
   cluster: database.cluster,
   dbName: database.dbName,
 });
+
+const cognito = new CognitoStack(app, "OrdersApp-Cognito", {
+  env,
+});
+
+const api = new ApiStack(app, "OrdersApp-Api", {
+  env,
+  ordersFunction: lambda.function,
+  userPool: cognito.userPool,
+  userPoolClient: cognito.userPoolClient,
+});
+
+database.addDependency(network);
+migration.addDependency(database);
+lambda.addDependency(database);
+api.addDependency(lambda);
+api.addDependency(cognito);

@@ -6,6 +6,7 @@ import * as ec2 from "aws-cdk-lib/aws-ec2";
 export class NetworkStack extends Stack {
   public readonly vpc: ec2.Vpc;
   public readonly lambdaSg: ec2.SecurityGroup;
+  public readonly migrationTaskSg: ec2.SecurityGroup;
   public readonly proxySg: ec2.SecurityGroup;
   public readonly dbSg: ec2.SecurityGroup;
 
@@ -26,9 +27,15 @@ export class NetworkStack extends Stack {
       ]
     });
 
+    // Securit Groups
     this.lambdaSg = new ec2.SecurityGroup(this, "LambdaSg", {
       vpc: this.vpc,
       description: "Security group for Orders Lambda"
+    });
+
+    this.migrationTaskSg = new ec2.SecurityGroup(this, "MigrationTaskSg", {
+      vpc: this.vpc,
+      description: "Security group for one-off database migration tasks"
     });
 
     this.proxySg = new ec2.SecurityGroup(this, "RdsProxySg", {
@@ -41,10 +48,17 @@ export class NetworkStack extends Stack {
       description: "Security group for Aurora PostgreSQL"
     });
 
+    // Ingress rules
     this.proxySg.addIngressRule(
       this.lambdaSg,
       ec2.Port.tcp(5432),
       "PostgreSQL from Lambda"
+    );
+
+    this.proxySg.addIngressRule(
+      this.migrationTaskSg,
+      ec2.Port.tcp(5432),
+      "PostgreSQL from migration Fargate task"
     );
 
     this.dbSg.addIngressRule(
@@ -53,8 +67,29 @@ export class NetworkStack extends Stack {
       "PostgreSQL from RDS Proxy"
     );
 
+    // VPC Endpoints 
     this.vpc.addInterfaceEndpoint("SecretsManagerEndpoint", {
       service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+    });
+
+    this.vpc.addInterfaceEndpoint("SecretsManagerEndpoint", {
+      service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+    });
+
+    this.vpc.addInterfaceEndpoint("EcrDockerEndpoint", {
+      service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
+    });
+
+    this.vpc.addInterfaceEndpoint("EcrApiEndpoint", {
+      service: ec2.InterfaceVpcEndpointAwsService.ECR,
+    });
+
+    this.vpc.addInterfaceEndpoint("CloudWatchLogsEndpoint", {
+      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+    });
+
+    this.vpc.addGatewayEndpoint("S3Endpoint", {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
     });
 
     new cdk.CfnOutput(this, "VpcId", {

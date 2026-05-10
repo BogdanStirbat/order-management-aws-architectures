@@ -1,13 +1,13 @@
 import * as path from "path";
+import { Duration, Stack, StackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
-import { Duration } from "aws-cdk-lib";
 
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
 
-export interface LambdaConstructProps {
+export interface LambdaStackProps extends StackProps {
   vpc: ec2.IVpc;
   lambdaSg: ec2.ISecurityGroup;
   proxy: rds.DatabaseProxy;
@@ -15,10 +15,10 @@ export interface LambdaConstructProps {
   dbName: string;
 }
 
-export class LambdaConstruct extends Construct {
+export class LambdaStack extends Stack {
   public readonly function: lambda.Function;
 
-  constructor(scope: Construct, id: string, props: LambdaConstructProps) {
+  constructor(scope: Construct, id: string, props: LambdaStackProps) {
     super(scope, id);
 
     const { vpc, lambdaSg, proxy, cluster, dbName } = props;

@@ -1,4 +1,5 @@
 import * as cdk from "aws-cdk-lib";
+import { Stack, StackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
 
 import * as lambda from "aws-cdk-lib/aws-lambda";
@@ -7,17 +8,17 @@ import * as integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as authorizers from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 
-export interface ApiConstructProps {
+export interface ApiStackProps extends StackProps {
   ordersFunction: lambda.IFunction;
   userPool: cognito.IUserPool;
   userPoolClient: cognito.IUserPoolClient;
 }
 
-export class ApiConstruct extends Construct {
+export class ApiStack extends Stack {
   public readonly api: apigwv2.HttpApi;
 
-  constructor(scope: Construct, id: string, props: ApiConstructProps) {
-    super(scope, id);
+  constructor(scope: Construct, id: string, props: ApiStackProps) {
+    super(scope, id, props);
 
     const integration = new integrations.HttpLambdaIntegration(
       "OrdersLambdaIntegration",
