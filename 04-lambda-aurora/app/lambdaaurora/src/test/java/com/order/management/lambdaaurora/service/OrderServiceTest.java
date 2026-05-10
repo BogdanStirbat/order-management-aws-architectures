@@ -29,7 +29,7 @@ public class OrderServiceTest {
   private OrderService service;
 
   @Test
-  void createOrder_createsOrder_whenTotalAmountIsPositive() throws SQLException {
+  void createOrder_createsOrder_whenTotalAmountIsPositive() {
 
     // given
     BigDecimal totalAmount = new BigDecimal("49.99");
@@ -65,7 +65,7 @@ public class OrderServiceTest {
   }
 
   @Test
-  void getOrder_returnsOrder_whenOrderExists() throws SQLException {
+  void getOrder_returnsOrder_whenOrderExists() {
 
     // given
     Order expected = order(1L, OrderStatus.CREATED, new BigDecimal("25.00"));
@@ -80,7 +80,7 @@ public class OrderServiceTest {
   }
 
   @Test
-  void getOrder_throwsOrderNotFoundException_whenOrderDoesNotExist() throws SQLException {
+  void getOrder_throwsOrderNotFoundException_whenOrderDoesNotExist() {
 
     // given
     when(repository.findById(99L)).thenReturn(Optional.empty());
@@ -93,7 +93,7 @@ public class OrderServiceTest {
   }
 
   @Test
-  void cancelOrder_returnsCancelledOrder_whenOrderExists() throws SQLException {
+  void cancelOrder_returnsCancelledOrder_whenOrderExists() {
 
     // given
     Order cancelled = order(1L, OrderStatus.CANCELLED, new BigDecimal("100.00"));
@@ -108,7 +108,7 @@ public class OrderServiceTest {
   }
 
   @Test
-  void cancelOrder_throwsOrderNotFoundException_whenOrderDoesNotExist() throws SQLException {
+  void cancelOrder_throwsOrderNotFoundException_whenOrderDoesNotExist() {
 
     // given
     when(repository.cancel(99L)).thenReturn(null);
@@ -121,7 +121,7 @@ public class OrderServiceTest {
   }
 
   @Test
-  void listOrders_returnsOrders_whenArgumentsAreValid() throws SQLException {
+  void listOrders_returnsOrders_whenArgumentsAreValid() {
 
     // given
     List<Order> expected = List.of(

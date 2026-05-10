@@ -5,7 +5,6 @@ import com.order.management.lambdaaurora.model.OrderStatus;
 import com.order.management.lambdaaurora.repository.OrderRepository;
 import com.order.management.lambdaaurora.service.exception.OrderNotFoundException;
 import java.math.BigDecimal;
-import java.sql.SQLException;
 import java.util.List;
 
 public class OrderService {
@@ -16,19 +15,19 @@ public class OrderService {
     this.repository = repository;
   }
 
-  public Order createOrder(BigDecimal totalAmount) throws SQLException {
+  public Order createOrder(BigDecimal totalAmount) {
     if (totalAmount == null || totalAmount.signum() <= 0) {
       throw new IllegalArgumentException("totalAmount must be positive");
     }
     return repository.create(totalAmount);
   }
 
-  public Order getOrder(long id) throws SQLException {
+  public Order getOrder(long id) {
     return repository.findById(id)
         .orElseThrow(() -> new OrderNotFoundException("Order not found: " + id));
   }
 
-  public Order cancelOrder(long id) throws SQLException {
+  public Order cancelOrder(long id) {
     Order order = repository.cancel(id);
     if (order == null) {
       throw new OrderNotFoundException("Order not found: " + id);
@@ -36,7 +35,7 @@ public class OrderService {
     return order;
   }
 
-  public List<Order> listOrders(OrderStatus status, int page, int size) throws SQLException {
+  public List<Order> listOrders(OrderStatus status, int page, int size) {
     if (page < 0) {
       throw new IllegalArgumentException("page must be greater than or equal to 0");
     }

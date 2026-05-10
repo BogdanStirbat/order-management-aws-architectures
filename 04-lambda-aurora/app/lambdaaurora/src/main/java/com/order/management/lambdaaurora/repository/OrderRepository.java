@@ -2,6 +2,7 @@ package com.order.management.lambdaaurora.repository;
 
 import com.order.management.lambdaaurora.model.Order;
 import com.order.management.lambdaaurora.model.OrderStatus;
+import com.order.management.lambdaaurora.repository.exception.DatabaseException;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -20,7 +21,7 @@ public class OrderRepository {
     this.dataSource = dataSource;
   }
 
-  public Order create(BigDecimal totalAmount) throws SQLException {
+  public Order create(BigDecimal totalAmount) {
     String sql = """
         INSERT INTO orders(status, total_amount)
         VALUES (?, ?)
@@ -37,10 +38,12 @@ public class OrderRepository {
         rs.next();
         return map(rs);
       }
+    } catch (SQLException e) {
+      throw new DatabaseException("Failed to create order", e);
     }
   }
 
-  public Optional<Order> findById(long id) throws SQLException {
+  public Optional<Order> findById(long id) {
     String sql = """
         SELECT id, version, status, total_amount, created_at, updated_at
         FROM orders
@@ -56,10 +59,12 @@ public class OrderRepository {
         if (!rs.next()) return Optional.empty();
         return Optional.of(map(rs));
       }
+    } catch (SQLException e) {
+      throw new DatabaseException("Failed to retrieve order by id", e);
     }
   }
 
-  public Order cancel(long id) throws SQLException {
+  public Order cancel(long id) {
     String updateSql = """
         UPDATE orders
         SET status = 'CANCELLED',
@@ -101,10 +106,12 @@ public class OrderRepository {
           );
         }
       }
+    } catch (SQLException e) {
+      throw new DatabaseException("Failed to cancel order", e);
     }
   }
 
-  public List<Order> findAll(OrderStatus status, int limit, int offset) throws SQLException {
+  public List<Order> findAll(OrderStatus status, int limit, int offset) {
     String sql = status == null
         ? """
           SELECT id, version, status, total_amount, created_at, updated_at
@@ -139,6 +146,8 @@ public class OrderRepository {
         }
         return orders;
       }
+    } catch (SQLException e) {
+      throw new DatabaseException("Failed to find orders", e);
     }
   }
 

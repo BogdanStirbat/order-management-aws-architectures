@@ -1,6 +1,7 @@
 package com.order.management.lambdaaurora.web;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,7 +15,6 @@ import com.order.management.lambdaaurora.service.exception.OrderNotFoundExceptio
 import com.order.management.lambdaaurora.web.dto.http.HttpRequest;
 import com.order.management.lambdaaurora.web.dto.http.HttpResponse;
 import java.math.BigDecimal;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -292,20 +292,18 @@ public class RouterTest {
   }
 
   @Test
-  void route_returns500_whenUnexpectedException() throws Exception {
+  void route_propagatesException_whenUnexpectedException() {
 
     // given
-    when(service.getOrder(1L)).thenThrow(new SQLException("database down"));
+    when(service.getOrder(1L)).thenThrow(new RuntimeException("unexpected exception"));
 
-    // when
-    HttpResponse response = router.route(request("GET", "/orders/1"));
-
-    // then
-    assertEquals(500, response.statusCode());
+    // when && then
+    assertThrows(RuntimeException.class,
+        () -> router.route(request("GET", "/orders/1")));
   }
 
   @Test
-  void route_trailingSlash_isNormalized() throws Exception {
+  void route_trailingSlash_isNormalized() {
 
     // given
     Order order = order(1L, OrderStatus.CREATED, new BigDecimal("25.00"));

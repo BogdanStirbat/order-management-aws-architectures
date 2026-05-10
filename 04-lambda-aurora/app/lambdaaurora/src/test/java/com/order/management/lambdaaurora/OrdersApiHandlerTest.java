@@ -1,7 +1,9 @@
 package com.order.management.lambdaaurora;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.amazonaws.services.lambda.runtime.Context;
@@ -134,5 +136,8 @@ public class OrdersApiHandlerTest {
     assertEquals("""
         {"message":"Internal server error"}
         """, response.getBody());
+
+    verify(logger).log(contains("Unhandled error"));
+    verify(logger).log(contains("Something went wrong"));
   }
 }

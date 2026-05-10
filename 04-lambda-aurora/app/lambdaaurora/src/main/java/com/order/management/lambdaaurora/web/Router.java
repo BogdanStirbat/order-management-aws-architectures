@@ -75,8 +75,6 @@ public class Router {
       return ApiResponse.error(400, ex.getMessage());
     } catch (OrderNotFoundException ex) {
       return ApiResponse.error(404, ex.getMessage());
-    } catch (Exception ex) {
-      return ApiResponse.error(500, "Internal server error");
     }
   }
 

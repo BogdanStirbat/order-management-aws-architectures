@@ -57,7 +57,7 @@ public class OrderRepositoryIT {
   }
 
   @Test
-  void create_createsOrder_whenInvoked() throws Exception {
+  void create_createsOrder_whenInvoked() {
 
     // when
     Order order = repository.create(new BigDecimal("49.99"));
@@ -72,7 +72,7 @@ public class OrderRepositoryIT {
   }
 
   @Test
-  void findById_whenOrderExists_returnsOrder() throws Exception {
+  void findById_whenOrderExists_returnsOrder() {
 
     // given
     Order created = repository.create(new BigDecimal("25.50"));
@@ -88,7 +88,7 @@ public class OrderRepositoryIT {
   }
 
   @Test
-  void findById_whenOrderDoesNotExist_returnsEmpty() throws Exception {
+  void findById_whenOrderDoesNotExist_returnsEmpty() {
 
     // when
     Optional<Order> found = repository.findById(999L);
@@ -134,7 +134,7 @@ public class OrderRepositoryIT {
   }
 
   @Test
-  void cancel_whenOrderDoesNotExist_returnsNull() throws Exception {
+  void cancel_whenOrderDoesNotExist_returnsNull() {
 
     // when
     Order cancelled = repository.cancel(999L);
@@ -144,7 +144,7 @@ public class OrderRepositoryIT {
   }
 
   @Test
-  void findAll_withoutStatus_returnsPagedOrders() throws Exception {
+  void findAll_withoutStatus_returnsPagedOrders() {
 
     // given
     repository.create(new BigDecimal("10.00"));
@@ -161,7 +161,7 @@ public class OrderRepositoryIT {
   }
 
   @Test
-  void findAll_withStatus_filtersOrders() throws Exception {
+  void findAll_withStatus_filtersOrders() {
 
     // given
     Order first = repository.create(new BigDecimal("10.00"));
