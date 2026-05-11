@@ -72,10 +72,6 @@ export class NetworkStack extends Stack {
       service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
     });
 
-    this.vpc.addInterfaceEndpoint("SecretsManagerEndpoint", {
-      service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
-    });
-
     this.vpc.addInterfaceEndpoint("EcrDockerEndpoint", {
       service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
     });
