@@ -3,7 +3,7 @@
 ## First deployment (base infrastructure does not exists)
 1. Build Lambda JAR
 ```
-cd ../orders-lambda
+cd ../lambdaaurora
 mvn clean install
 ```
 
@@ -46,7 +46,7 @@ cdk deploy OrdersApp-Api
 
 1. Build Lambda JAR
 ```
-cd ../orders-lambda
+cd ../lambdaaurora
 mvn clean install
 ```
 
