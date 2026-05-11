@@ -19,7 +19,7 @@ export class LambdaStack extends Stack {
   public readonly function: lambda.Function;
 
   constructor(scope: Construct, id: string, props: LambdaStackProps) {
-    super(scope, id);
+    super(scope, id, props);
 
     const { vpc, lambdaSg, proxy, cluster, dbName } = props;
 
