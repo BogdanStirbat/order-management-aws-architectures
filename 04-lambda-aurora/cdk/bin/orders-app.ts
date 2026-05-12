@@ -47,7 +47,7 @@ const cognito = new CognitoStack(app, "OrdersApp-Cognito", {
 
 const api = new ApiStack(app, "OrdersApp-Api", {
   env,
-  ordersFunction: lambda.function,
+  ordersFunction: lambda.ordersAlias,
   userPool: cognito.userPool,
   userPoolClient: cognito.userPoolClient,
 });

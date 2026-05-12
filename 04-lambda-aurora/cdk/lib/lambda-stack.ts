@@ -6,6 +6,7 @@ import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
+import * as cdk from "aws-cdk-lib";
 
 export interface LambdaStackProps extends StackProps {
   vpc: ec2.IVpc;
@@ -16,14 +17,15 @@ export interface LambdaStackProps extends StackProps {
 }
 
 export class LambdaStack extends Stack {
-  public readonly function: lambda.Function;
+  public readonly ordersFunction: lambda.Function;
+  public readonly ordersAlias: lambda.Alias;
 
   constructor(scope: Construct, id: string, props: LambdaStackProps) {
     super(scope, id, props);
 
     const { vpc, lambdaSg, proxy, cluster, dbName } = props;
 
-    this.function = new lambda.Function(this, "OrdersApiFunction", {
+    this.ordersFunction = new lambda.Function(this, "OrdersApiFunction", {
       functionName: "orders-api-lambda",
       runtime: lambda.Runtime.JAVA_21,
       architecture: lambda.Architecture.ARM_64,
@@ -32,6 +34,8 @@ export class LambdaStack extends Stack {
         path.resolve("../lambdaaurora/target/lambdaaurora-1.0.0.jar")
       ),
       memorySize: 1024,
+      reservedConcurrentExecutions: 10, // protect RDS Proxy from traffic spikes
+      snapStart: lambda.SnapStartConf.ON_PUBLISHED_VERSIONS,
       timeout: Duration.seconds(30),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
@@ -45,6 +49,15 @@ export class LambdaStack extends Stack {
       logRetention: logs.RetentionDays.ONE_WEEK
     });
 
-    cluster.secret!.grantRead(this.function);
+    cluster.secret!.grantRead(this.ordersFunction);
+
+    this.ordersAlias = new lambda.Alias(this, "OrdersApiLiveAlias", {
+      aliasName: "live",
+      version: this.ordersFunction.currentVersion,
+    });
+
+    new cdk.CfnOutput(this, "OrdersFunctionAliasArn", {
+      value: this.ordersAlias.functionArn,
+    });
   }
 }
