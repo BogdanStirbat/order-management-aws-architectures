@@ -7,6 +7,7 @@ import * as rds from "aws-cdk-lib/aws-rds";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as cdk from "aws-cdk-lib";
+import type { OrdersAppConfig } from "./config";
 
 export interface LambdaStackProps extends StackProps {
   vpc: ec2.IVpc;
@@ -14,6 +15,7 @@ export interface LambdaStackProps extends StackProps {
   proxy: rds.DatabaseProxy;
   cluster: rds.DatabaseCluster;
   dbName: string;
+  config: OrdersAppConfig;
 }
 
 export class LambdaStack extends Stack {
@@ -23,7 +25,7 @@ export class LambdaStack extends Stack {
   constructor(scope: Construct, id: string, props: LambdaStackProps) {
     super(scope, id, props);
 
-    const { vpc, lambdaSg, proxy, cluster, dbName } = props;
+    const { vpc, lambdaSg, proxy, cluster, dbName, config } = props;
 
     this.ordersFunction = new lambda.Function(this, "OrdersApiFunction", {
       functionName: "orders-api-lambda",
@@ -33,8 +35,8 @@ export class LambdaStack extends Stack {
       code: lambda.Code.fromAsset(
         path.resolve("../lambdaaurora/target/lambdaaurora-1.0.0.jar")
       ),
-      memorySize: 1024,
-      reservedConcurrentExecutions: 10, // protect RDS Proxy from traffic spikes
+      memorySize: config.lambdaMemorySize,
+      reservedConcurrentExecutions: config.lambdaReservedConcurrentExecutions, // protect RDS Proxy from traffic spikes
       snapStart: lambda.SnapStartConf.ON_PUBLISHED_VERSIONS,
       timeout: Duration.seconds(30),
       vpc,

@@ -4,11 +4,13 @@ import { Construct } from "constructs";
 
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as rds from "aws-cdk-lib/aws-rds";
+import type { OrdersAppConfig } from "./config";
 
 export interface DatabaseStackProps extends StackProps {
   vpc: ec2.IVpc;
   dbSg: ec2.ISecurityGroup;
   proxySg: ec2.ISecurityGroup;
+  config: OrdersAppConfig;
 }
 
 export class DatabaseStack extends Stack {
@@ -19,7 +21,7 @@ export class DatabaseStack extends Stack {
   constructor(scope: Construct, id: string, props: DatabaseStackProps) {
     super(scope, id, props);
 
-    const { vpc, dbSg, proxySg } = props;
+    const { vpc, dbSg, proxySg, config } = props;
 
     this.cluster = new rds.DatabaseCluster(this, "OrdersAuroraCluster", {
       clusterIdentifier: "orders-aurora-serverless-v2",
@@ -36,8 +38,8 @@ export class DatabaseStack extends Stack {
       },
       securityGroups: [dbSg],
       writer: rds.ClusterInstance.serverlessV2("writer"),
-      serverlessV2MinCapacity: 0.5,
-      serverlessV2MaxCapacity: 2,
+      serverlessV2MinCapacity: config.auroraServerlessV2MinCapacity,
+      serverlessV2MaxCapacity: config.auroraServerlessV2MaxCapacity,
       backup: {
         retention: Duration.days(7)
       },
