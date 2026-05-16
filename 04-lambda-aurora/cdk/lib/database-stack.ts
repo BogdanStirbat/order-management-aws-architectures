@@ -37,14 +37,35 @@ export class DatabaseStack extends Stack {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED
       },
       securityGroups: [dbSg],
-      writer: rds.ClusterInstance.serverlessV2("writer"),
+
+      writer: rds.ClusterInstance.serverlessV2("writer", {
+        publiclyAccessible: false,
+      }),
+
+      // if configured, make sure readers instances are available 
+      // to be promited in case writer becomes unavailable;
+      //
+      // if writer becomes unhealthy and there are no readers available, 
+      // recovery can take longer if no readers are available
+      // 
+      // please note, reader instances consume ACU capacity, thus increase costs
+      readers: Array.from({ length: config.auroraReaderCount }, (_, index) =>
+        rds.ClusterInstance.serverlessV2(`reader-${index + 1}`, {
+          publiclyAccessible: false,
+
+          scaleWithWriter: true,
+        })
+      ),
+
       serverlessV2MinCapacity: config.auroraServerlessV2MinCapacity,
       serverlessV2MaxCapacity: config.auroraServerlessV2MaxCapacity,
+
       backup: {
         retention: Duration.days(7)
       },
+
       storageEncrypted: true,
-      removalPolicy: RemovalPolicy.DESTROY
+      removalPolicy: RemovalPolicy.DESTROY // dev-friendly
     });
 
     this.proxy = new rds.DatabaseProxy(this, "OrdersRdsProxy", {

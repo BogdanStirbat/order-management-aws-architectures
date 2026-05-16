@@ -350,8 +350,6 @@ export class MonitoringStack extends Stack {
         period: Duration.minutes(5),
         statistic: "max",
       }),
-      // Tune after observing normal behavior. For your reserved Lambda concurrency of 10,
-      // this should usually stay modest because RDS Proxy pools connections.
       threshold: 40,
       evaluationPeriods: 3,
       datapointsToAlarm: 2,
@@ -386,11 +384,30 @@ export class MonitoringStack extends Stack {
         period: Duration.minutes(5),
         statistic: "average",
       }),
-      // 256 MiB. Tune after observing normal Aurora Serverless v2 behavior.
+      // 256 MiB. 
       threshold: 256 * 1024 * 1024,
       evaluationPeriods: 3,
       datapointsToAlarm: 2,
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }));
+
+    addAlarmAction(new cloudwatch.Alarm(this, "OrdersAuroraReplicaLagAlarm", {
+      alarmName: "orders-aurora-replica-lag-high",
+      alarmDescription: "Aurora replica lag is high.",
+      metric: new cloudwatch.Metric({
+        namespace: "AWS/RDS",
+        metricName: "AuroraReplicaLagMaximum",
+        dimensionsMap: {
+          DBClusterIdentifier: props.dbCluster.clusterIdentifier,
+        },
+        period: Duration.minutes(1),
+        statistic: "maximum",
+      }),
+      threshold: 5_000,
+      evaluationPeriods: 5,
+      datapointsToAlarm: 3,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     }));
 
