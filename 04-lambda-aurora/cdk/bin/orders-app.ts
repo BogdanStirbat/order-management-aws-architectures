@@ -69,13 +69,3 @@ const monitoring = new MonitoringStack(app, "OrdersApp-Monitoring", {
   migrationTaskFamily: "orders-db-migration",
   config,
 });
-
-database.addDependency(network);
-migration.addDependency(database);
-lambda.addDependency(database);
-api.addDependency(lambda);
-api.addDependency(cognito);
-monitoring.addDependency(api);
-monitoring.addDependency(lambda);
-monitoring.addDependency(database);
-monitoring.addDependency(migration);
