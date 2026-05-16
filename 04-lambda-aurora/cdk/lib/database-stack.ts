@@ -23,6 +23,16 @@ export class DatabaseStack extends Stack {
 
     const { vpc, dbSg, proxySg, config } = props;
 
+    // Prevent CDK L2 constructs from adding implicit ingress/egress rules.
+    const immutableDbSg = ec2.SecurityGroup.fromSecurityGroupId(
+      this,
+      "ImportedAuroraSg",
+      dbSg.securityGroupId,
+      {
+        mutable: false,
+      }
+    );
+
     this.cluster = new rds.DatabaseCluster(this, "OrdersAuroraCluster", {
       clusterIdentifier: "orders-aurora-serverless-v2",
       engine: rds.DatabaseClusterEngine.auroraPostgres({
@@ -36,7 +46,7 @@ export class DatabaseStack extends Stack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED
       },
-      securityGroups: [dbSg],
+      securityGroups: [immutableDbSg],
 
       writer: rds.ClusterInstance.serverlessV2("writer", {
         publiclyAccessible: false,
@@ -68,12 +78,22 @@ export class DatabaseStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY // dev-friendly
     });
 
+    // Prevent CDK L2 constructs from adding implicit ingress/egress rules.
+    const immutableProxySg = ec2.SecurityGroup.fromSecurityGroupId(
+      this,
+      "ImportedRdsProxySg",
+      proxySg.securityGroupId,
+      {
+        mutable: false,
+      }
+    );
+
     this.proxy = new rds.DatabaseProxy(this, "OrdersRdsProxy", {
       proxyTarget: rds.ProxyTarget.fromCluster(this.cluster),
       dbProxyName: "orders-rds-proxy",
       secrets: [this.cluster.secret!],
       vpc,
-      securityGroups: [proxySg],
+      securityGroups: [immutableProxySg],
       requireTLS: true,
       iamAuth: false,
       debugLogging: false
