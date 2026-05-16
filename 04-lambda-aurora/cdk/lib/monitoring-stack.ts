@@ -10,12 +10,16 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as ecs from "aws-cdk-lib/aws-ecs";
+import * as logs from "aws-cdk-lib/aws-logs";
 import type { OrdersAppConfig } from "./config";
 
 export interface MonitoringStackProps extends StackProps {
   api: apigwv2.HttpApi;
+  apiAccessLogGroup: logs.ILogGroup;
+
   ordersFunction: lambda.IFunction;
   ordersAlias: lambda.IFunction;
+
   dbCluster: rds.DatabaseCluster;
   dbProxy: rds.DatabaseProxy;
 
@@ -223,6 +227,15 @@ export class MonitoringStack extends Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     }));
+
+    new logs.MetricFilter(this, "ApiJwtAuthorizerFailureMetricFilter", {
+      logGroup: props.apiAccessLogGroup,
+      metricNamespace: "OrdersApp",
+      metricName: "ApiJwtAuthorizerFailureCount",
+      filterPattern: logs.FilterPattern.literal('{ $.authorizerError = "*" }'),
+      metricValue: "1",
+      defaultValue: 0,
+    });
 
     /*
      * RDS Proxy alarms

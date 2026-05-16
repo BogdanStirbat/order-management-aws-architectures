@@ -59,7 +59,8 @@ const api = new ApiStack(app, "OrdersApp-Api", {
 
 const monitoring = new MonitoringStack(app, "OrdersApp-Monitoring", {
   env,
-  api: api.api,
+  api: api.httpApi,
+  apiAccessLogGroup: api.accessLogGroup,
   ordersFunction: lambda.ordersFunction,
   ordersAlias: lambda.ordersAlias,
   dbCluster: database.cluster,
