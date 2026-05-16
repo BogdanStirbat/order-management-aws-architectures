@@ -33,7 +33,7 @@ export class LambdaStack extends Stack {
       architecture: lambda.Architecture.ARM_64,
       handler: "com.order.management.lambdaaurora.OrdersApiHandler::handleRequest",
       code: lambda.Code.fromAsset(
-        path.resolve("../lambdaaurora/target/lambdaaurora-1.0.0.jar")
+        path.resolve("../app/lambdaaurora/target/lambdaaurora-1.0.0.jar")
       ),
       memorySize: config.lambdaMemorySize,
       reservedConcurrentExecutions: config.lambdaReservedConcurrentExecutions, // protect RDS Proxy from traffic spikes
