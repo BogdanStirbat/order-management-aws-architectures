@@ -49,7 +49,7 @@ export class ApiStack extends Stack {
 
     this.httpApi = new apigwv2.HttpApi(this, "OrdersHttpApi", {
       apiName: "orders-lambda-api",
-      createDefaultStage: true,
+      createDefaultStage: false,
     });
 
     const routeOptions = {

@@ -14,7 +14,7 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import type { OrdersAppConfig } from "./config";
 
 export interface MonitoringStackProps extends StackProps {
-  api: apigwv2.HttpApi;
+  httpApi: apigwv2.HttpApi;
   apiAccessLogGroup: logs.ILogGroup;
 
   ordersFunction: lambda.IFunction;
@@ -124,7 +124,7 @@ export class MonitoringStack extends Stack {
      */
 
     const apiDimensions = {
-      ApiId: props.api.apiId,
+      ApiId: props.httpApi.apiId,
       Stage: "$default",
     };
 
