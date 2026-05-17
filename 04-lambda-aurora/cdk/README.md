@@ -3,8 +3,9 @@
 ## First deployment (base infrastructure does not exists)
 1. Build Lambda JAR
 ```
-cd ../lambdaaurora
+cd ../app/lambdaaurora
 mvn clean install
+cd -
 ```
 
 2.
@@ -42,12 +43,18 @@ cdk deploy OrdersApp-Cognito
 cdk deploy OrdersApp-Api
 ```
 
+9. 
+```
+cdk deploy OrdersApp-Monitoring
+```
+
 ## Further deployments (base infrastructure exists)
 
 1. Build Lambda JAR
 ```
-cd ../lambdaaurora
+cd ../app/lambdaaurora
 mvn clean install
+cd -
 ```
 
 2. 
