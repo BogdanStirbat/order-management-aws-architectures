@@ -129,7 +129,7 @@ export class MonitoringStack extends Stack {
     };
 
     const api5xxRate = new cloudwatch.MathExpression({
-      expression: "errors / MAX([requests, 1]) * 100",
+      expression: "IF(requests > 0, errors / requests * 100, 0)",
       usingMetrics: {
         errors: new cloudwatch.Metric({
           namespace: "AWS/ApiGateway",
@@ -162,7 +162,7 @@ export class MonitoringStack extends Stack {
     }));
 
     const api4xxRate = new cloudwatch.MathExpression({
-      expression: "errors / MAX([requests, 1]) * 100",
+      expression: "IF(requests > 0, errors / requests * 100, 0)",
       usingMetrics: {
         errors: new cloudwatch.Metric({
           namespace: "AWS/ApiGateway",
