@@ -24,6 +24,35 @@ cdk deploy OrdersApp-Migration
 ```
 
 5. Run the migration task
+
+```
+export CLUSTER_NAME=$(aws cloudformation describe-stacks \
+  --stack-name OrdersApp-Migration \
+  --query "Stacks[0].Outputs[?OutputKey=='MigrationClusterName'].OutputValue" \
+  --output text)
+```
+
+```
+export TASK_DEFINITION_ARN=$(aws cloudformation describe-stacks \
+  --stack-name OrdersApp-Migration \
+  --query "Stacks[0].Outputs[?OutputKey=='MigrationTaskDefinitionArn'].OutputValue" \
+  --output text)
+```
+
+```
+export SUBNET_IDS=$(aws cloudformation describe-stacks \
+  --stack-name OrdersApp-Migration \
+  --query "Stacks[0].Outputs[?OutputKey=='MigrationSubnetIds'].OutputValue" \
+  --output text)
+```
+
+```
+export SECURITY_GROUP_ID=$(aws cloudformation describe-stacks \
+  --stack-name OrdersApp-Migration \
+  --query "Stacks[0].Outputs[?OutputKey=='MigrationSecurityGroupId'].OutputValue" \
+  --output text)
+```
+
 ```
 ./scripts/run-migration-task.sh
 ```
