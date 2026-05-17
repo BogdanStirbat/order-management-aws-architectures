@@ -1,3 +1,4 @@
+import * as cdk from "aws-cdk-lib";
 import { RemovalPolicy, Stack, StackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as cognito from "aws-cdk-lib/aws-cognito";
@@ -22,6 +23,14 @@ export class CognitoStack extends Stack {
         userPassword: true,
         userSrp: true,
       },
+    });
+
+    new cdk.CfnOutput(this, "UserPoolId", {
+      value: this.userPool.userPoolId,
+    });
+
+    new cdk.CfnOutput(this, "UserPoolClientId", {
+      value: this.userPoolClient.userPoolClientId,
     });
   }
 }
