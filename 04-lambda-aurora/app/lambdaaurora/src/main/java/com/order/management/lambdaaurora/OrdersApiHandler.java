@@ -41,7 +41,9 @@ public class OrdersApiHandler implements RequestHandler<APIGatewayV2HTTPEvent, A
 
     } catch (Exception ex) {
       if (context != null && context.getLogger() != null) {
-        context.getLogger().log("Unhandled error \n" + stackTraceToString(ex));
+        context.getLogger().log(
+            "Unhandled error requestId=" + context.getAwsRequestId() + "\n" + stackTraceToString(ex)
+        );
       }
 
       return adapter.toApiGatewayResponse(ApiResponse.error(500, "Internal server error"));
