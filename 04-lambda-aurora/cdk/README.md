@@ -189,5 +189,3 @@ curl -i -X POST "$API_URL/orders" \
   -H "Content-Type: application/json" \
   -d '{"totalAmount":49.99}'
 ```
-
-8. 
