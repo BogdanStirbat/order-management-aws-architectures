@@ -41,4 +41,6 @@ Architecture diagram:
 
 ![Architecture Diagram](04-lambda-aurora/docs/diagrams/architecture.png)
 
+All details can be found in the project folder: [04-lambda-aurora](04-lambda-aurora)
+
 I intentionally excluded EKS from this comparison because Kubernetes introduces a different axis (platform complexity vs deployment model).
