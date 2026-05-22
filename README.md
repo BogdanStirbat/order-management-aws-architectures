@@ -33,7 +33,12 @@ Architecture diagram:
 
 All details can be found in the project folder: [03-ecs-fargate](03-ecs-fargate)
 
-# Architecture 4: Serverless architecture.
+# Architecture 4: Deployed on Lambda with Aurora Serverless v2.
 
+The application runs on Lambda, having Aurora Serverless v2 as database.
+
+Architecture diagram:
+
+![Architecture Diagram](04-lambda-aurora/docs/diagrams/architecture.png)
 
 I intentionally excluded EKS from this comparison because Kubernetes introduces a different axis (platform complexity vs deployment model).
