@@ -1,0 +1,10 @@
+flowchart TD
+    Build[Build Java Lambda JAR] --> Network[Deploy Network Stack]
+    Network --> Database[Deploy Database Stack]
+    Database --> Migration[Deploy Migration Stack]
+    Migration --> RunMigration[Run Flyway Migration Task]
+    RunMigration --> Lambda[Deploy Lambda Stack]
+    Lambda --> Cognito[Deploy Cognito Stack]
+    Cognito --> Api[Deploy API Stack]
+    Api --> Monitoring[Deploy Monitoring Stack]
+

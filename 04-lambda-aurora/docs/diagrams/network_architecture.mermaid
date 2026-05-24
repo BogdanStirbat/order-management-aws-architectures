@@ -1,0 +1,32 @@
+flowchart TB
+    subgraph VPC[VPC]
+        subgraph AZA[Availability Zone A]
+            SubnetA[Private Isolated Subnet A]
+        end
+
+        subgraph AZB[Availability Zone B]
+            SubnetB[Private Isolated Subnet B]
+        end
+
+        Lambda[Lambda ENIs]
+        Migration[ECS Migration Task]
+        Proxy[RDS Proxy]
+        Aurora[Aurora PostgreSQL]
+
+        Lambda --> Proxy
+        Migration --> Proxy
+        Proxy --> Aurora
+
+        Lambda -.-> SubnetA
+        Lambda -.-> SubnetB
+        Migration -.-> SubnetA
+        Migration -.-> SubnetB
+        Proxy -.-> SubnetA
+        Proxy -.-> SubnetB
+        Aurora -.-> SubnetA
+        Aurora -.-> SubnetB
+    end
+
+    Client[Client] --> Api[API Gateway HTTP API]
+    Api --> Lambda
+
