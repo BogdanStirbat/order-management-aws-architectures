@@ -37,7 +37,10 @@ public class OrderService {
 
   public OrderPage listOrders(OrderStatus status, int limit, String nextToken) {
     if (limit <= 0) {
-      throw new IllegalArgumentException("page must be greater than or equal to 0");
+      throw new IllegalArgumentException("limit must be greater than");
+    }
+    if (limit > 100) {
+      throw new IllegalArgumentException("limit must be less than 100");
     }
 
     return repository.findAll(status, limit, nextToken);

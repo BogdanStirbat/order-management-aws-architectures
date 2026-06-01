@@ -160,6 +160,16 @@ public class OrderServiceTest {
     );
   }
 
+  @Test
+  void listOrders_throwsIllegalArgumentException_whenLimitIsGreaterThan100() {
+
+    // given && when && then
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> service.listOrders(null, 101, null)
+    );
+  }
+
   private static Order order(String id, OrderStatus status, BigDecimal totalAmount) {
     return new Order(
         id,
