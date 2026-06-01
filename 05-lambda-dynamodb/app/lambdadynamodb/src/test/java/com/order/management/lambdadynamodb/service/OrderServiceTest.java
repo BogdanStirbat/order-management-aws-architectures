@@ -6,7 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.order.management.lambdadynamodb.model.Order;
 import com.order.management.lambdadynamodb.model.OrderStatus;
-import com.order.management.lambdadynamodb.repository.OrderPage;
+import com.order.management.lambdadynamodb.model.OrderPage;
 import com.order.management.lambdadynamodb.repository.OrderRepository;
 import com.order.management.lambdadynamodb.service.exception.OrderNotFoundException;
 import java.math.BigDecimal;

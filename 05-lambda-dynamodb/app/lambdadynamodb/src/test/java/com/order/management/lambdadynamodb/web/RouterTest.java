@@ -10,7 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.order.management.lambdadynamodb.model.Order;
 import com.order.management.lambdadynamodb.model.OrderStatus;
-import com.order.management.lambdadynamodb.repository.OrderPage;
+import com.order.management.lambdadynamodb.model.OrderPage;
 import com.order.management.lambdadynamodb.service.OrderService;
 import com.order.management.lambdadynamodb.service.exception.OrderNotFoundException;
 import com.order.management.lambdadynamodb.web.dto.http.HttpRequest;

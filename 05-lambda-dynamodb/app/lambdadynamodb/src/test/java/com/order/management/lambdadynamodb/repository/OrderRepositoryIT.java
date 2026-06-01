@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.order.management.lambdadynamodb.model.Order;
+import com.order.management.lambdadynamodb.model.OrderPage;
 import com.order.management.lambdadynamodb.model.OrderStatus;
 import java.math.BigDecimal;
 import java.net.URI;

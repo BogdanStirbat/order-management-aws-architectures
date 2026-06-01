@@ -3,6 +3,7 @@ package com.order.management.lambdadynamodb.repository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.order.management.lambdadynamodb.model.Order;
+import com.order.management.lambdadynamodb.model.OrderPage;
 import com.order.management.lambdadynamodb.model.OrderStatus;
 import com.order.management.lambdadynamodb.repository.exception.DatabaseException;
 import java.math.BigDecimal;
