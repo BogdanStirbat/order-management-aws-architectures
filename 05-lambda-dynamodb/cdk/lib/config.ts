@@ -1,9 +1,6 @@
 import * as cdk from "aws-cdk-lib";
 
 export type OrdersAppConfig = {
-  auroraServerlessV2MinCapacity: number;
-  auroraServerlessV2MaxCapacity: number;
-  auroraReaderCount: number;
 
   lambdaMemorySize: number;
   lambdaReservedConcurrentExecutions: number;
@@ -29,9 +26,6 @@ function nullableString(app: cdk.App, key: string): string | undefined {
 export function loadConfig(app: cdk.App): OrdersAppConfig {
 
   const config: OrdersAppConfig = {
-    auroraServerlessV2MinCapacity: optionalNumber(app, "auroraServerlessV2MinCapacity", 0.5),
-    auroraServerlessV2MaxCapacity: optionalNumber(app, "auroraServerlessV2MaxCapacity", 2),
-    auroraReaderCount: optionalNumber(app, "auroraReaderCount", 0),
 
     lambdaMemorySize: optionalNumber(app, "lambdaMemorySize", 1024),
     lambdaReservedConcurrentExecutions: optionalNumber(app, "lambdaReservedConcurrentExecutions", 10),
@@ -43,18 +37,6 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
      * 
      */
     alarmEmail: nullableString(app, "alarmEmail"),
-  }
-
-  if (config.auroraServerlessV2MinCapacity <= 0) {
-    throw new Error("auroraServerlessV2MinCapacity must be greater than 0");
-  }
-
-  if (config.auroraServerlessV2MaxCapacity < config.auroraServerlessV2MinCapacity) {
-    throw new Error("auroraServerlessV2MaxCapacity must be greater than or equal to auroraServerlessV2MinCapacity");
-  }
-
-  if (config.auroraReaderCount < 0) {
-    throw new Error("auroraReaderCount must be greater than or equal to 0");
   }
 
   if (config.lambdaMemorySize < 128) {
