@@ -45,3 +45,9 @@ const monitoring = new MonitoringStack(app, "OrdersApp-Monitoring", {
   ordersTable: dynamoDb.table,
   config,
 });
+
+
+lambda.addDependency(dynamoDb);
+api.addDependency(lambda);
+api.addDependency(cognito);
+monitoring.addDependency(api);

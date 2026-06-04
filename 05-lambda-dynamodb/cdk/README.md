@@ -7,27 +7,7 @@ mvn clean install
 cd -
 ```
 
-2. 
+2. Deploy the stack
 ```
-cdk deploy OrdersApp-DynamoDB
-```
-
-3. 
-```
-cdk deploy OrdersApp-Lambda
-```
-
-4. 
-```
-cdk deploy OrdersApp-Cognito
-```
-
-5. 
-```
-cdk deploy OrdersApp-Api
-```
-
-6. 
-```
-cdk deploy OrdersApp-Monitoring
+cdk deploy --all
 ```
