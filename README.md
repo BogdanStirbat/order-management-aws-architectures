@@ -43,4 +43,14 @@ Architecture diagram:
 
 All details can be found in the project folder: [04-lambda-aurora](04-lambda-aurora)
 
+# Architecture 5: Deployed on Lambda with DynamoDB.
+
+The application runs on Lambda, having DynamoDB as database.
+
+Architecture diagram:
+
+![Architecture Diagram](05-lambda-dynamodb/docs/diagrams/architecture.png)
+
+All details can be found in the project folder: [05-lambda-dynamodb](05-lambda-dynamodb)
+
 I intentionally excluded EKS from this comparison because Kubernetes introduces a different axis (platform complexity vs deployment model).
