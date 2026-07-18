@@ -1,0 +1,25 @@
+{
+  "name": "orders-app-cdk",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy"
+  },
+  "dependencies": {
+    "@aws-cdk/lambda-layer-kubectl-v31": "^2.1.0",
+    "aws-cdk-lib": "^2.213.0",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "typescript": "^5.5.4",
+    "aws-cdk": "^2.213.0",
+    "ts-node": "^10.9.2"
+  }
+}
