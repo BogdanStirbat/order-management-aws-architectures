@@ -54,7 +54,7 @@ export class EksStack extends Stack {
       maxSize: config.nodeGroupMaxSize,
       diskSize: config.nodeDiskSizeGb,
       instanceTypes: [new ec2.InstanceType(config.nodeInstanceType)],
-      amiType: eks.NodegroupAmiType.AL2_X86_64,
+      amiType: eks.NodegroupAmiType.AL2023_X86_64_STANDARD,
       capacityType: eks.CapacityType.ON_DEMAND,
       remoteAccess: undefined,
     });
