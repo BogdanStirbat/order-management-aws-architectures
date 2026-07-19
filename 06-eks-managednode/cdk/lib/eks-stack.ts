@@ -36,7 +36,7 @@ export class EksStack extends Stack {
 
     this.cluster = new eks.Cluster(this, "EksCluster", {
       clusterName: config.eksClusterName,
-      version: eks.KubernetesVersion.V1_31,
+      version: eks.KubernetesVersion.V1_35,
       vpc: props.vpc,
       vpcSubnets: [{ subnets: props.appSubnets }],
       defaultCapacity: 0,
