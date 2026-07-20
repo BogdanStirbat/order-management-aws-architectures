@@ -12,7 +12,7 @@
     "destroy": "cdk destroy"
   },
   "dependencies": {
-    "@aws-cdk/lambda-layer-kubectl-v31": "^2.1.0",
+    "@aws-cdk/lambda-layer-kubectl-v35": "^2.1.0",
     "aws-cdk-lib": "^2.213.0",
     "constructs": "^10.4.2"
   },

@@ -8,13 +8,15 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
-import { KubectlV31Layer } from "@aws-cdk/lambda-layer-kubectl-v31";
+import { KubectlV35Layer } from "@aws-cdk/lambda-layer-kubectl-v35";
 import type { OrdersAppConfig } from "./config";
 
 export interface EksStackProps extends StackProps {
   vpc: ec2.IVpc;
   appSubnets: ec2.ISubnet[];
-  nodeSecurityGroup: ec2.ISecurityGroup;
+  albSecurityGroup: ec2.ISecurityGroup;
+  dbSecurityGroup: ec2.ISecurityGroup;
+  endpointsSecurityGroup: ec2.ISecurityGroup;
   dbSecret: secretsmanager.ISecret;
   db: rds.DatabaseInstance;
   appRepository: ecr.Repository;
@@ -41,7 +43,7 @@ export class EksStack extends Stack {
       vpcSubnets: [{ subnets: props.appSubnets }],
       defaultCapacity: 0,
       endpointAccess: eks.EndpointAccess.PUBLIC_AND_PRIVATE,
-      kubectlLayer: new KubectlV31Layer(this, "KubectlLayer"),
+      kubectlLayer: new KubectlV35Layer(this, "KubectlLayer"),
       outputClusterName: true,
       outputConfigCommand: true,
     });
@@ -59,7 +61,23 @@ export class EksStack extends Stack {
       remoteAccess: undefined,
     });
 
-    this.nodeGroup.connections.addSecurityGroup(props.nodeSecurityGroup);
+    this.cluster.clusterSecurityGroup.addIngressRule(
+      props.albSecurityGroup,
+      ec2.Port.tcp(config.appPort),
+      "Application traffic from ALB"
+    );
+
+    props.dbSecurityGroup.addIngressRule(
+      this.cluster.clusterSecurityGroup,
+      ec2.Port.tcp(5432),
+      "PostgreSQL from EKS managed nodes",
+    );
+
+    props.endpointsSecurityGroup.addIngressRule(
+      this.cluster.clusterSecurityGroup,
+      ec2.Port.tcp(443),
+      "HTTPS from EKS managed nodes"
+    );
 
     props.appRepository.grantPull(this.nodeGroup.role);
     props.adotRepository.grantPull(this.nodeGroup.role);

@@ -17,7 +17,6 @@ export type OrdersAppConfig = {
   useNatGateway: boolean;
 
   eksClusterName: string;
-  kubernetesVersion: "1.31";
   nodeGroupName: string;
   nodeInstanceType: string;
   nodeGroupMinSize: number;
@@ -105,7 +104,6 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
     useNatGateway: optionalBool(app, "useNatGateway", true),
 
     eksClusterName: optionalString(app, "eksClusterName", "orders-app-eks"),
-    kubernetesVersion: "1.31",
     nodeGroupName: optionalString(app, "nodeGroupName", "orders-app-mng"),
     nodeInstanceType: optionalString(app, "nodeInstanceType", "t3.medium"),
     nodeGroupMinSize: optionalNumber(app, "nodeGroupMinSize", 2),
