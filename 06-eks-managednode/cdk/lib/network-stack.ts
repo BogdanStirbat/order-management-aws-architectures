@@ -15,7 +15,6 @@ export class NetworkStack extends Stack {
 
   public readonly vpcLinkSecurityGroup: ec2.SecurityGroup;
   public readonly albSecurityGroup: ec2.SecurityGroup;
-  public readonly nodeSecurityGroup: ec2.SecurityGroup;
   public readonly dbSecurityGroup: ec2.SecurityGroup;
   public readonly endpointsSg: ec2.SecurityGroup;
 
@@ -65,12 +64,6 @@ export class NetworkStack extends Stack {
       description: "Private ALB security group for orders app",
     });
 
-    this.nodeSecurityGroup = new ec2.SecurityGroup(this, "EksNodeSecurityGroup", {
-      vpc: this.vpc,
-      securityGroupName: "orders-app-sg-eks-nodes",
-      description: "EKS worker node security group",
-    });
-
     this.dbSecurityGroup = new ec2.SecurityGroup(this, "DbSecurityGroup", {
       vpc: this.vpc,
       securityGroupName: "orders-app-sg-db",
@@ -87,30 +80,6 @@ export class NetworkStack extends Stack {
       this.vpcLinkSecurityGroup,
       ec2.Port.tcp(80),
       "HTTP from API Gateway VPC Link",
-    );
-
-    this.nodeSecurityGroup.addIngressRule(
-      this.albSecurityGroup,
-      ec2.Port.tcp(8080),
-      "App traffic from private ALB to pods/node ENIs",
-    );
-
-    this.nodeSecurityGroup.addIngressRule(
-      this.nodeSecurityGroup,
-      ec2.Port.allTcp(),
-      "Allow node-to-node traffic",
-    );
-
-    this.dbSecurityGroup.addIngressRule(
-      this.nodeSecurityGroup,
-      ec2.Port.tcp(5432),
-      "PostgreSQL from EKS nodes/pods",
-    );
-
-    this.endpointsSg.addIngressRule(
-      this.nodeSecurityGroup,
-      ec2.Port.tcp(443),
-      "HTTPS from EKS nodes/pods",
     );
 
     this.vpc.addGatewayEndpoint("S3Endpoint", {
