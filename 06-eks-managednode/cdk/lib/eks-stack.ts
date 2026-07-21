@@ -14,16 +14,22 @@ import type { OrdersAppConfig } from "./config";
 export interface EksStackProps extends StackProps {
   vpc: ec2.IVpc;
   appSubnets: ec2.ISubnet[];
+
   albSecurityGroup: ec2.ISecurityGroup;
   dbSecurityGroup: ec2.ISecurityGroup;
   endpointsSecurityGroup: ec2.ISecurityGroup;
+
   dbSecret: secretsmanager.ISecret;
   db: rds.DatabaseInstance;
+
   appRepository: ecr.Repository;
   adotRepository: ecr.Repository;
+
   targetGroup: elbv2.ApplicationTargetGroup;
+
   cognitoIssuerUri: string;
   cognitoUserPoolClientId: string;
+
   config: OrdersAppConfig;
 }
 
@@ -48,6 +54,35 @@ export class EksStack extends Stack {
       outputConfigCommand: true,
     });
 
+    new ec2.CfnSecurityGroupIngress(this, "AlbToEksIngress", {
+      groupId: this.cluster.clusterSecurityGroup.securityGroupId,
+      sourceSecurityGroupId: props.albSecurityGroup.securityGroupId,
+      ipProtocol: "tcp",
+      fromPort: config.appPort,
+      toPort: config.appPort,
+      description: "Application traffic from ALB",
+    });
+
+    new ec2.CfnSecurityGroupIngress(this, "EksToDbIngress", {
+      groupId: props.dbSecurityGroup.securityGroupId,
+      sourceSecurityGroupId:
+        this.cluster.clusterSecurityGroup.securityGroupId,
+      ipProtocol: "tcp",
+      fromPort: 5432,
+      toPort: 5432,
+      description: "PostgreSQL from EKS",
+    });
+
+    new ec2.CfnSecurityGroupIngress(this, "EksToEndpointsIngress", {
+      groupId: props.endpointsSecurityGroup.securityGroupId,
+      sourceSecurityGroupId:
+        this.cluster.clusterSecurityGroup.securityGroupId,
+      ipProtocol: "tcp",
+      fromPort: 443,
+      toPort: 443,
+      description: "HTTPS from EKS",
+    });
+
     this.nodeGroup = this.cluster.addNodegroupCapacity("ManagedNodeGroup", {
       nodegroupName: config.nodeGroupName,
       subnets: { subnets: props.appSubnets },
@@ -60,24 +95,6 @@ export class EksStack extends Stack {
       capacityType: eks.CapacityType.ON_DEMAND,
       remoteAccess: undefined,
     });
-
-    this.cluster.clusterSecurityGroup.addIngressRule(
-      props.albSecurityGroup,
-      ec2.Port.tcp(config.appPort),
-      "Application traffic from ALB"
-    );
-
-    props.dbSecurityGroup.addIngressRule(
-      this.cluster.clusterSecurityGroup,
-      ec2.Port.tcp(5432),
-      "PostgreSQL from EKS managed nodes",
-    );
-
-    props.endpointsSecurityGroup.addIngressRule(
-      this.cluster.clusterSecurityGroup,
-      ec2.Port.tcp(443),
-      "HTTPS from EKS managed nodes"
-    );
 
     props.appRepository.grantPull(this.nodeGroup.role);
     props.adotRepository.grantPull(this.nodeGroup.role);
