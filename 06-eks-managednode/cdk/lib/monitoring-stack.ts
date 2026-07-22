@@ -48,7 +48,7 @@ export class MonitoringStack extends Stack {
 
     const alb5xxAlarm = new cloudwatch.Alarm(this, "AlbTarget5xxAlarm", {
       alarmName: "orders-app-eks-alb-target-5xx",
-      metric: targetGroup.metricHttpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, {
+      metric: targetGroup.metrics.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, {
         period: Duration.minutes(5),
         statistic: "Sum",
       }),
@@ -63,7 +63,7 @@ export class MonitoringStack extends Stack {
 
     const unhealthyHostsAlarm = new cloudwatch.Alarm(this, "UnhealthyHostsAlarm", {
       alarmName: "orders-app-eks-unhealthy-targets",
-      metric: targetGroup.metricUnhealthyHostCount({
+      metric: targetGroup.metrics.unhealthyHostCount({
         period: Duration.minutes(1),
         statistic: "Average",
       }),
@@ -78,7 +78,7 @@ export class MonitoringStack extends Stack {
 
     const targetResponseTimeAlarm = new cloudwatch.Alarm(this, "TargetResponseTimeAlarm", {
       alarmName: "orders-app-eks-target-response-time",
-      metric: targetGroup.metricTargetResponseTime({
+      metric: targetGroup.metrics.targetResponseTime({
         period: Duration.minutes(5),
         statistic: "Average",
       }),
@@ -193,14 +193,14 @@ export class MonitoringStack extends Stack {
     this.dashboard.addWidgets(
       new cloudwatch.GraphWidget({
         title: "ALB - Target Response Time",
-        left: [targetGroup.metricTargetResponseTime({ period: Duration.minutes(5), statistic: "Average" })],
+        left: [targetGroup.metrics.targetResponseTime({ period: Duration.minutes(5), statistic: "Average" })],
         width: 12,
       }),
       new cloudwatch.GraphWidget({
         title: "ALB - 5XX and Unhealthy Targets",
         left: [
-          targetGroup.metricHttpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, { period: Duration.minutes(5), statistic: "Sum" }),
-          targetGroup.metricUnhealthyHostCount({ period: Duration.minutes(1), statistic: "Average" }),
+          targetGroup.metrics.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, { period: Duration.minutes(5), statistic: "Sum" }),
+          targetGroup.metrics.unhealthyHostCount({ period: Duration.minutes(1), statistic: "Average" }),
         ],
         width: 12,
       }),
