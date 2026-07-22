@@ -17,13 +17,13 @@ export class EcrRepositoryStack extends Stack {
     this.appRepository = new ecr.Repository(this, "AppRepository", {
       repositoryName: props.config.appEcrRepositoryName,
       removalPolicy: RemovalPolicy.DESTROY,
-      autoDeleteImages: true,
+      emptyOnDelete: true,
     });
 
     this.adotRepository = new ecr.Repository(this, "AdotRepository", {
       repositoryName: props.config.adotEcrRepositoryName,
       removalPolicy: RemovalPolicy.DESTROY,
-      autoDeleteImages: true,
+      emptyOnDelete: true,
     });
 
     new CfnOutput(this, "AppRepositoryUri", { value: this.appRepository.repositoryUri });
