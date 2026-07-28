@@ -185,7 +185,16 @@ export class EksStack extends Stack {
       repository: "https://kubernetes-sigs.github.io/metrics-server/",
       chart: "metrics-server",
       release: "metrics-server",
+
+      // Chart 3.13.1 deploys Metrics Server 0.8.1.
+      version: "3.13.1",
+
       values: {
+        replicas: 2,
+        podDisruptionBudget: {
+          enabled: true,
+          minAvailable: 1,
+        },
         args: ["--kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname"],
       },
     });
