@@ -41,6 +41,7 @@ export class EksStack extends Stack {
     super(scope, id, props);
 
     const { config } = props;
+    const appServiceAccountName = `${config.appName}-sa`;
 
     this.cluster = new eks.Cluster(this, "EksCluster", {
       clusterName: config.eksClusterName,
@@ -54,6 +55,82 @@ export class EksStack extends Stack {
       outputConfigCommand: true,
     });
 
+    this.nodeGroup = this.cluster.addNodegroupCapacity("ManagedNodeGroup", {
+      nodegroupName: config.nodeGroupName,
+      subnets: { subnets: props.appSubnets },
+      minSize: config.nodeGroupMinSize,
+      desiredSize: config.nodeGroupDesiredSize,
+      maxSize: config.nodeGroupMaxSize,
+      diskSize: config.nodeDiskSizeGb,
+      instanceTypes: [new ec2.InstanceType(config.nodeInstanceType)],
+      amiType: eks.NodegroupAmiType.AL2023_X86_64_STANDARD,
+      capacityType: eks.CapacityType.ON_DEMAND,
+      remoteAccess: undefined,
+    });
+
+    props.appRepository.grantPull(this.nodeGroup.role);
+    props.adotRepository.grantPull(this.nodeGroup.role);
+
+    /**
+     * EKS Pod Identity Agent
+     */
+    const podIdentityAgent = new eks.CfnAddon(this, "EksPodIdentityAgent", {
+      clusterName: this.cluster.clusterName,
+      addonName: "eks-pod-identity-agent",
+      resolveConflicts: "OVERWRITE",
+    });
+
+    podIdentityAgent.node.addDependency(this.cluster);
+
+    /**
+     * AWS Secrets Store CSI Driver provider
+     */
+    const secretsStoreProvider = new eks.CfnAddon(
+      this,
+      "AwsSecretsStoreCsiProvider",
+      {
+        clusterName: this.cluster.clusterName,
+        addonName: "aws-secrets-store-csi-driver-provider",
+        resolveConflicts: "OVERWRITE",
+      },
+    );
+    secretsStoreProvider.node.addDependency(this.nodeGroup);
+    secretsStoreProvider.node.addDependency(podIdentityAgent);
+
+    /**
+     * IAM role assumed through EKS Pod Identity
+     */
+    const appSecretsRole = new iam.Role(this, "OrdersAppSecretsRole", {
+      roleName: `${config.appName}-secrets-pod-identity-role`,
+      assumedBy: new iam.ServicePrincipal(
+        "pods.eks.amazonaws.com").withSessionTags(),
+      description:
+        "Allows the Orders application pod to retrieve its RDS secret",
+    });
+
+    props.dbSecret.grantRead(appSecretsRole);
+
+    /**
+     * Associate role with orders/orders-app-sa
+     */
+    const podIdentityAssociation =
+      new eks.CfnPodIdentityAssociation(
+        this,
+        "OrdersAppSecretsPodIdentityAssociation",
+        {
+          clusterName: this.cluster.clusterName,
+          namespace: config.namespace,
+          serviceAccount: appServiceAccountName,
+          roleArn: appSecretsRole.roleArn,
+        },
+      );
+
+    podIdentityAssociation.node.addDependency(podIdentityAgent);
+    podIdentityAssociation.node.addDependency(appSecretsRole);
+
+    /**
+     * Security Groups Ingress
+     */
     new ec2.CfnSecurityGroupIngress(this, "AlbToEksIngress", {
       groupId: this.cluster.clusterSecurityGroup.securityGroupId,
       sourceSecurityGroupId: props.albSecurityGroup.securityGroupId,
@@ -83,21 +160,6 @@ export class EksStack extends Stack {
       description: "HTTPS from EKS",
     });
 
-    this.nodeGroup = this.cluster.addNodegroupCapacity("ManagedNodeGroup", {
-      nodegroupName: config.nodeGroupName,
-      subnets: { subnets: props.appSubnets },
-      minSize: config.nodeGroupMinSize,
-      desiredSize: config.nodeGroupDesiredSize,
-      maxSize: config.nodeGroupMaxSize,
-      diskSize: config.nodeDiskSizeGb,
-      instanceTypes: [new ec2.InstanceType(config.nodeInstanceType)],
-      amiType: eks.NodegroupAmiType.AL2023_X86_64_STANDARD,
-      capacityType: eks.CapacityType.ON_DEMAND,
-      remoteAccess: undefined,
-    });
-
-    props.appRepository.grantPull(this.nodeGroup.role);
-    props.adotRepository.grantPull(this.nodeGroup.role);
     this.nodeGroup.role.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName("AWSXRayDaemonWriteAccess"),
     );
@@ -106,6 +168,10 @@ export class EksStack extends Stack {
     const loadBalancerController = this.installAwsLoadBalancerController(props);
     const appResources = this.installApplication(props);
 
+    appResources.node.addDependency(this.nodeGroup);
+    appResources.node.addDependency(podIdentityAgent);
+    appResources.node.addDependency(secretsStoreProvider);
+    appResources.node.addDependency(podIdentityAssociation);
     appResources.node.addDependency(loadBalancerController);
     appResources.node.addDependency(metricsServer);
 
@@ -178,6 +244,9 @@ export class EksStack extends Stack {
   private installApplication(props: EksStackProps): eks.KubernetesManifest {
     const { config } = props;
 
+    const appServiceAccountName = `${config.appName}-sa`;
+    const secretProviderClassName = `${config.appName}-rds`;
+
     const namespace = {
       apiVersion: "v1",
       kind: "Namespace",
@@ -193,16 +262,30 @@ export class EksStack extends Stack {
       },
     };
 
-    const secret = {
-      apiVersion: "v1",
-      kind: "Secret",
+    const secretProviderClass = {
+      apiVersion: "secrets-store.csi.x-k8s.io/v1",
+      kind: "SecretProviderClass",
       metadata: {
-        name: `${config.appName}-db-secret`,
+        name: `${config.appName}-rds`,
         namespace: config.namespace,
       },
-      type: "Opaque",
-      stringData: {
-        password: props.dbSecret.secretValueFromJson("password").unsafeUnwrap(),
+      spec: {
+        provider: "aws",
+        parameters: {
+          usePodIdentity: "true",
+          objects: [
+            {
+              objectName: props.dbSecret.secretArn,
+              objectType: "secretsmanager",
+              jmesPath: [
+                {
+                  path: "password",
+                  objectAlias: "spring.datasource.password",
+                },
+              ],
+            },
+          ],
+        },
       },
     };
 
@@ -228,24 +311,35 @@ export class EksStack extends Stack {
           spec: {
             serviceAccountName: `${config.appName}-sa`,
             terminationGracePeriodSeconds: 60,
+            volumes: [
+              {
+                name: "rds-secret",
+                csi: {
+                  driver: "secrets-store.csi.k8s.io",
+                  readOnly: true,
+                  volumeAttributes: {
+                    secretProviderClass: `${config.appName}-rds`,
+                  },
+                },
+              },
+            ],
             containers: [
               {
                 name: "app",
                 image: props.appRepository.repositoryUriForTag(config.appImageTag),
                 imagePullPolicy: "Always",
+                volumeMounts: [
+                  {
+                    name: "rds-secret",
+                    mountPath: "/mnt/secrets-store",
+                    readOnly: true,
+                  },
+                ],
                 ports: [{ containerPort: config.appPort }],
                 env: [
+                  { name: "SPRING_PROFILES_ACTIVE", value: "eks" },
                   { name: "SPRING_DATASOURCE_URL", value: jdbcUrl },
                   { name: "SPRING_DATASOURCE_USERNAME", value: "postgres" },
-                  {
-                    name: "SPRING_DATASOURCE_PASSWORD",
-                    valueFrom: {
-                      secretKeyRef: {
-                        name: `${config.appName}-db-secret`,
-                        key: "password",
-                      },
-                    },
-                  },
                   { name: "COGNITO_ISSUER_URI", value: props.cognitoIssuerUri },
                   { name: "COGNITO_USER_POOL_CLIENT_ID", value: props.cognitoUserPoolClientId },
                   { name: "OTEL_EXPORTER_OTLP_ENDPOINT", value: "http://localhost:4318/v1/traces" },
@@ -361,7 +455,6 @@ export class EksStack extends Stack {
       "OrdersAppKubernetesResources",
       namespace,
       serviceAccount,
-      secret,
       deployment,
       service,
       hpa,
