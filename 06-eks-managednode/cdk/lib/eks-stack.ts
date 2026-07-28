@@ -186,7 +186,7 @@ export class EksStack extends Stack {
       chart: "metrics-server",
       release: "metrics-server",
       values: {
-        args: ["--kubelet-insecure-tls"],
+        args: ["--kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname"],
       },
     });
   }
