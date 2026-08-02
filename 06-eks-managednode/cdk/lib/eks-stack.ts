@@ -27,6 +27,9 @@ function loadJsonPolicyFromProjectRoot(relativePath: string): iam.PolicyDocument
   return iam.PolicyDocument.fromJson(parsed);
 }
 
+/**
+ * iam/aws-load-balancer-controller-v3.4.2-policy.json -> https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v3.4.2/docs/install/iam_policy.json
+*/
 const LBC_POLICY_FILES: Record<string, string> = {
   "3.4.2": "iam/aws-load-balancer-controller-v3.4.2-policy.json",
 };
