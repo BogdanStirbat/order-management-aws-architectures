@@ -10,6 +10,22 @@ import * as rds from "aws-cdk-lib/aws-rds";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { KubectlV35Layer } from "@aws-cdk/lambda-layer-kubectl-v35";
 import type { OrdersAppConfig } from "./config";
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+function loadJsonPolicyFromProjectRoot(relativePath: string): iam.PolicyDocument {
+  const absolutePath = path.resolve(process.cwd(), relativePath);
+
+  if (!fs.existsSync(absolutePath)) {
+    throw new Error(`IAM policy file does not exist: ${absolutePath}`);
+  }
+
+  const parsed: unknown = JSON.parse(
+    fs.readFileSync(absolutePath, "utf8"),
+  );
+
+  return iam.PolicyDocument.fromJson(parsed);
+}
 
 export interface EksStackProps extends StackProps {
   vpc: ec2.IVpc;
@@ -81,6 +97,7 @@ export class EksStack extends Stack {
     });
 
     podIdentityAgent.node.addDependency(this.cluster);
+    podIdentityAgent.node.addDependency(this.nodeGroup);
 
     /**
      * AWS Secrets Store CSI Driver provider
@@ -165,7 +182,7 @@ export class EksStack extends Stack {
     );
 
     const metricsServer = this.installMetricsServer();
-    const loadBalancerController = this.installAwsLoadBalancerController(props);
+    const loadBalancerController = this.installAwsLoadBalancerController(props, podIdentityAgent);
     const appResources = this.installApplication(props);
 
     appResources.node.addDependency(this.nodeGroup);
@@ -200,53 +217,118 @@ export class EksStack extends Stack {
     });
   }
 
-  private installAwsLoadBalancerController(props: EksStackProps): eks.HelmChart {
-    const serviceAccount = this.cluster.addServiceAccount("AwsLoadBalancerControllerSa", {
-      name: "aws-load-balancer-controller",
-      namespace: "kube-system",
-    });
+  private installAwsLoadBalancerController(
+    props: EksStackProps,
+    podIdentityAgent: eks.CfnAddon,
+  ): eks.HelmChart {
+    const { config } = props;
 
-    serviceAccount.addToPrincipalPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        "elasticloadbalancing:DescribeLoadBalancers",
-        "elasticloadbalancing:DescribeListeners",
-        "elasticloadbalancing:DescribeRules",
-        "elasticloadbalancing:DescribeTargetGroups",
-        "elasticloadbalancing:DescribeTargetHealth",
-        "elasticloadbalancing:RegisterTargets",
-        "elasticloadbalancing:DeregisterTargets",
-        "elasticloadbalancing:ModifyTargetGroup",
-        "elasticloadbalancing:ModifyTargetGroupAttributes",
-        "ec2:DescribeVpcs",
-        "ec2:DescribeSubnets",
-        "ec2:DescribeSecurityGroups",
-        "ec2:DescribeInstances",
-        "ec2:DescribeNetworkInterfaces",
-        "ec2:DescribeAvailabilityZones",
-        "ec2:DescribeTags",
-        "ec2:CreateTags",
-      ],
-      resources: ["*"],
-    }));
+    const controllerServiceAccountName =
+      "aws-load-balancer-controller";
 
-    const chart = this.cluster.addHelmChart("AwsLoadBalancerController", {
-      namespace: "kube-system",
-      repository: "https://aws.github.io/eks-charts",
-      chart: "aws-load-balancer-controller",
-      release: "aws-load-balancer-controller",
-      values: {
-        clusterName: this.cluster.clusterName,
-        region: Stack.of(this).region,
-        vpcId: props.vpc.vpcId,
-        serviceAccount: {
-          create: false,
-          name: serviceAccount.serviceAccountName,
+    const controllerServiceAccount = this.cluster.addManifest(
+      "AwsLoadBalancerControllerServiceAccount",
+      {
+        apiVersion: "v1",
+        kind: "ServiceAccount",
+        metadata: {
+          name: controllerServiceAccountName,
+          namespace: "kube-system",
         },
       },
-    });
+    );
 
-    chart.node.addDependency(serviceAccount);
+    const policyDocument = loadJsonPolicyFromProjectRoot(
+      "iam/aws-load-balancer-controller-v3.4.2-policy.json",
+    );
+
+    const controllerPrincipal =
+      new iam.ServicePrincipal("pods.eks.amazonaws.com")
+        .withSessionTags()
+        .withConditions({
+          StringEquals: {
+            "aws:RequestTag/kubernetes-namespace":
+              "kube-system",
+            "aws:RequestTag/kubernetes-service-account":
+              controllerServiceAccountName,
+          },
+        });
+
+    const controllerRole = new iam.Role(
+      this,
+      "AwsLoadBalancerControllerPodIdentityRole",
+      {
+        roleName:
+          `${config.eksClusterName}-aws-lbc-v3-4-2`,
+        assumedBy: controllerPrincipal,
+        description:
+          "Pod Identity role for AWS Load Balancer Controller v3.4.2",
+      },
+    );
+
+    const controllerPolicy = new iam.ManagedPolicy(
+      this,
+      "AwsLoadBalancerControllerPolicyV342",
+      {
+        managedPolicyName:
+          `${config.eksClusterName}-aws-lbc-v3-4-2-policy`,
+        description:
+          "Official IAM policy for AWS Load Balancer Controller v3.4.2",
+        document: policyDocument,
+      },
+    );
+
+    controllerRole.addManagedPolicy(controllerPolicy);
+
+    const association = new eks.CfnPodIdentityAssociation(
+      this,
+      "AwsLoadBalancerControllerPodIdentityAssociation",
+      {
+        clusterName: this.cluster.clusterName,
+        namespace: "kube-system",
+        serviceAccount: controllerServiceAccountName,
+        roleArn: controllerRole.roleArn,
+      },
+    );
+
+    association.node.addDependency(podIdentityAgent);
+    association.node.addDependency(controllerRole);
+    association.node.addDependency(controllerServiceAccount);
+
+    const chart = this.cluster.addHelmChart(
+      "AwsLoadBalancerController",
+      {
+        namespace: "kube-system",
+        repository: "https://aws.github.io/eks-charts",
+        chart: "aws-load-balancer-controller",
+        release: "aws-load-balancer-controller",
+
+        // Chart 3.4.2 deploys controller v3.4.2.
+        version: "3.4.2",
+
+        values: {
+          clusterName: this.cluster.clusterName,
+          region: Stack.of(this).region,
+          vpcId: props.vpc.vpcId,
+
+          replicaCount: 2,
+
+          serviceAccount: {
+            create: false,
+            name: controllerServiceAccountName,
+          },
+
+          enableServiceMutatorWebhook: true,
+        },
+      },
+    );
+
+    chart.node.addDependency(this.nodeGroup);
+    chart.node.addDependency(podIdentityAgent);
+    chart.node.addDependency(controllerServiceAccount);
+    chart.node.addDependency(association);
+    chart.node.addDependency(controllerPolicy);
+
     return chart;
   }
 
