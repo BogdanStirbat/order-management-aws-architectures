@@ -1,4 +1,5 @@
-import { Stack, StackProps } from "aws-cdk-lib";
+import * as cdk from "aws-cdk-lib";
+import { RemovalPolicy, Stack, StackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 
@@ -12,13 +13,14 @@ export class CognitoStack extends Stack {
     super(scope, id, props);
 
     this.userPool = new cognito.UserPool(this, "OrdersUserPool", {
-      userPoolName: "orders-app-eks-users",
-      selfSignUpEnabled: false,
+      userPoolName: "orders-app-users",
+      selfSignUpEnabled: false, // new users are created by the account owner 
       signInAliases: { email: true },
+      removalPolicy: RemovalPolicy.DESTROY, // dev friendly
     });
 
     this.userPoolClient = this.userPool.addClient("OrdersApiClient", {
-      generateSecret: false,
+      generateSecret: false, // typical for public clients
       authFlows: {
         userPassword: true,
         userSrp: true,
@@ -27,5 +29,13 @@ export class CognitoStack extends Stack {
 
     this.issuerUri = `https://cognito-idp.${this.region}.amazonaws.com/${this.userPool.userPoolId}`;
     this.userPoolClientId = this.userPoolClient.userPoolClientId;
+
+    new cdk.CfnOutput(this, "UserPoolId", {
+      value: this.userPool.userPoolId,
+    });
+
+    new cdk.CfnOutput(this, "UserPoolClientId", {
+      value: this.userPoolClient.userPoolClientId,
+    });
   }
 }
