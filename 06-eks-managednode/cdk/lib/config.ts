@@ -16,6 +16,9 @@ export type OrdersAppConfig = {
 
   useNatGateway: boolean;
 
+  metricsServerChartVersion: string;
+  awsLoadBalancerControllerChartVersion: string;
+
   eksClusterName: string;
   nodeGroupName: string;
   nodeInstanceType: string;
@@ -102,6 +105,9 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
     // For learning EKS, NAT makes add-ons and image pulls much easier.
     // Set -c useNatGateway=false only if you also mirror all needed images and keep the VPC endpoints complete.
     useNatGateway: optionalBool(app, "useNatGateway", true),
+
+    metricsServerChartVersion: optionalString(app, "metricsServerChartVersion", "3.13.1"),
+    awsLoadBalancerControllerChartVersion: optionalString(app, "awsLoadBalancerControllerChartVersion", "3.4.2"),
 
     eksClusterName: optionalString(app, "eksClusterName", "orders-app-eks"),
     nodeGroupName: optionalString(app, "nodeGroupName", "orders-app-mng"),

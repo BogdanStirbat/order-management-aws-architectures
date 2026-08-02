@@ -27,6 +27,23 @@ function loadJsonPolicyFromProjectRoot(relativePath: string): iam.PolicyDocument
   return iam.PolicyDocument.fromJson(parsed);
 }
 
+const LBC_POLICY_FILES: Record<string, string> = {
+  "3.4.2": "iam/aws-load-balancer-controller-v3.4.2-policy.json",
+};
+
+function loadLbcPolicy(chartVersion: string): iam.PolicyDocument {
+  const policyFile = LBC_POLICY_FILES[chartVersion];
+
+  if (!policyFile) {
+    throw new Error(
+      `No reviewed IAM policy is registered for AWS Load Balancer ` +
+      `Controller chart ${chartVersion}`,
+    );
+  }
+
+  return loadJsonPolicyFromProjectRoot(policyFile);
+}
+
 export interface EksStackProps extends StackProps {
   vpc: ec2.IVpc;
   appSubnets: ec2.ISubnet[];
@@ -181,7 +198,7 @@ export class EksStack extends Stack {
       iam.ManagedPolicy.fromAwsManagedPolicyName("AWSXRayDaemonWriteAccess"),
     );
 
-    const metricsServer = this.installMetricsServer();
+    const metricsServer = this.installMetricsServer(props);
     const loadBalancerController = this.installAwsLoadBalancerController(props, podIdentityAgent);
     const appResources = this.installApplication(props);
 
@@ -196,7 +213,9 @@ export class EksStack extends Stack {
     new cdk.CfnOutput(this, "EksKubectlRoleArn", { value: this.cluster.kubectlRole?.roleArn ?? "" });
   }
 
-  private installMetricsServer(): eks.HelmChart {
+  private installMetricsServer(props: EksStackProps): eks.HelmChart {
+    const { config } = props;
+
     return this.cluster.addHelmChart("MetricsServer", {
       namespace: "kube-system",
       repository: "https://kubernetes-sigs.github.io/metrics-server/",
@@ -204,7 +223,7 @@ export class EksStack extends Stack {
       release: "metrics-server",
 
       // Chart 3.13.1 deploys Metrics Server 0.8.1.
-      version: "3.13.1",
+      version: config.metricsServerChartVersion,
 
       values: {
         replicas: 2,
@@ -238,9 +257,7 @@ export class EksStack extends Stack {
       },
     );
 
-    const policyDocument = loadJsonPolicyFromProjectRoot(
-      "iam/aws-load-balancer-controller-v3.4.2-policy.json",
-    );
+    const policyDocument = loadLbcPolicy(config.awsLoadBalancerControllerChartVersion);
 
     const controllerPrincipal =
       new iam.ServicePrincipal("pods.eks.amazonaws.com")
@@ -304,7 +321,7 @@ export class EksStack extends Stack {
         release: "aws-load-balancer-controller",
 
         // Chart 3.4.2 deploys controller v3.4.2.
-        version: "3.4.2",
+        version: config.awsLoadBalancerControllerChartVersion,
 
         values: {
           clusterName: this.cluster.clusterName,
