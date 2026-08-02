@@ -1,3 +1,4 @@
+import * as cdk from "aws-cdk-lib";
 import { Stack, StackProps, RemovalPolicy } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
@@ -98,6 +99,10 @@ export class ApiStack extends Stack {
           integrationErrorMessage: "$context.integrationErrorMessage",
         })),
       },
+    });
+
+    new cdk.CfnOutput(this, "ApiUrl", {
+      value: this.httpApi.apiEndpoint,
     });
   }
 }
