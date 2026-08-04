@@ -191,7 +191,7 @@ export ID_TOKEN=$(aws cognito-idp initiate-auth \
   --client-id "$USER_POOL_CLIENT_ID" \
   --auth-flow USER_PASSWORD_AUTH \
   --auth-parameters USERNAME="$TEST_EMAIL",PASSWORD="$TEST_PASSWORD" \
-  --query "AuthenticationResult.IdToken" \
+  --query "AuthenticationResult.AccessToken" \
   --output text)
 
 ```
@@ -213,7 +213,7 @@ Expected result:
 The response should include an order similar to:
 ```
 {
-  "id": "4f9b6a2e-9f1e-4c9d-9a0e-3b3a7d5e1a91",
+  "id": "91",
   "version": 0,
   "status": "CREATED",
   "totalAmount": 49.99,
