@@ -29,7 +29,7 @@ export class NetworkStack extends Stack {
       vpcName: "orders-app-eks-vpc",
       ipAddresses: ec2.IpAddresses.cidr("10.0.0.0/16"),
       maxAzs: 2,
-      natGateways: props.config.useNatGateway ? 1 : 0,
+      natGateways: props.config.useNatGateway ? 2 : 0,
       subnetConfiguration: [
         {
           name: "public",
