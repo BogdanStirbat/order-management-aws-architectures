@@ -398,7 +398,7 @@ export class EksStack extends Stack {
       "ClusterAutoscalerPodIdentityRole",
       {
         roleName: `${props.config.eksClusterName}-cluster-autoscaler`,
-        assumedBy: new iam.ServicePrincipal("pods.eks.amazon.com").withSessionTags(),
+        assumedBy: new iam.ServicePrincipal("pods.eks.amazonaws.com").withSessionTags(),
         description: "Pod Identity role for Kubernetes Cluster Autoscaler"
       }
     );
