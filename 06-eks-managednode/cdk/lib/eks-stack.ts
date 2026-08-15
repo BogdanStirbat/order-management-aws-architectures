@@ -12,6 +12,7 @@ import { KubectlV35Layer } from "@aws-cdk/lambda-layer-kubectl-v35";
 import type { OrdersAppConfig } from "./config";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { NamespaceType } from "aws-cdk-lib/aws-servicediscovery";
 
 function loadJsonPolicyFromProjectRoot(relativePath: string): iam.PolicyDocument {
   const absolutePath = path.resolve(process.cwd(), relativePath);
@@ -106,6 +107,21 @@ export class EksStack extends Stack {
 
     props.appRepository.grantPull(this.nodeGroup.role);
     props.adotRepository.grantPull(this.nodeGroup.role);
+
+    /**
+     * Cluster Autoscaler auto-discovery tags
+     */
+    const cfnNodeGroup = this.nodeGroup.node.defaultChild as eks.CfnNodegroup;
+
+    cdk.Tags.of(cfnNodeGroup).add(
+      "k8s.io/cluster-autoscaler/enabled", 
+      "true"
+    );
+
+    cdk.Tags.of(cfnNodeGroup).add(
+      `k8s.io/cluster-autoscaler/${this.cluster.clusterName}`, 
+      "owned"
+    );
 
     /**
      * EKS Pod Identity Agent
@@ -203,6 +219,7 @@ export class EksStack extends Stack {
 
     const metricsServer = this.installMetricsServer(props);
     const loadBalancerController = this.installAwsLoadBalancerController(props, podIdentityAgent);
+    const clusterAutoscaler = this.installClusterAutoscaler(props, podIdentityAgent);
     const appResources = this.installApplication(props);
 
     appResources.node.addDependency(this.nodeGroup);
@@ -210,6 +227,7 @@ export class EksStack extends Stack {
     appResources.node.addDependency(secretsStoreProvider);
     appResources.node.addDependency(podIdentityAssociation);
     appResources.node.addDependency(loadBalancerController);
+    appResources.node.addDependency(clusterAutoscaler);
     appResources.node.addDependency(metricsServer);
 
     new cdk.CfnOutput(this, "EksClusterName", { value: this.cluster.clusterName });
@@ -348,6 +366,153 @@ export class EksStack extends Stack {
     chart.node.addDependency(controllerServiceAccount);
     chart.node.addDependency(association);
     chart.node.addDependency(controllerPolicy);
+
+    return chart;
+  }
+
+  private installClusterAutoscaler(props: EksStackProps, podIdentityAgent: eks.CfnAddon): eks.HelmChart {
+    const { config } = props;
+
+    const serviceAccountName = "cluster-autoscaler";
+
+    /**
+     * Kubernetes Service Account
+     */
+    const serviceAccount = this.cluster.addManifest(
+      "ClusterAutoscalerServiceAccount", 
+      {
+        apiVersion: "v1",
+        kind: "ServiceAccount",
+        metadata: {
+          name: serviceAccountName,
+          namespace: "kube-system"
+        }
+      }
+    );
+
+    /**
+     * IAM role assumed using EKS Pod Identity
+     */
+    const autoscalerRole = new iam.Role(
+      this,
+      "ClusterAutoscalerPodIdentityRole",
+      {
+        roleName: `${props.config.eksClusterName}-cluster-autoscaler`,
+        assumedBy: new iam.ServicePrincipal("pods.eks.amazon.com").withSessionTags(),
+        description: "Pod Identity role for Kubernetes Cluster Autoscaler"
+      }
+    );
+
+    /**
+     * Cluster discovery permissions
+     */
+    autoscalerRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeAutoScalingInstances",
+          "autoscaling:DescribeLaunchConfigurations",
+          "autoscaling:DescribeScalingActivities",
+          "autoscaling:DescribeTags",
+          "ec2:DescribeImages",
+          "ec2:DescribeInstanceTypes",
+          "ec2:DescribeLaunchTemplateVersions",
+          "ec2:GetInstanceTypesFromInstanceRequirements",
+          "eks:DescribeNodegroup"
+        ],
+        resources: ["*"]
+      })
+    );
+
+    /**
+     * Scaling permissions.
+     */
+    autoscalerRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "autoscaling:SetDesiredCapacity",
+          "autoscaling:TerminateInstanceInAutoScalingGroup",
+        ],
+        resources: ["*"],
+        conditions: {
+          StringEquals: {
+            "aws:ResourceTag/k8s.io/cluster-autoscaler/enabled": "true",
+            [`aws:ResourceTag/k8s.io/cluster-autoscaler/${this.cluster.clusterName}`]: "owned"
+          }
+        }
+      })
+    );
+
+    /**
+     * EKS Pod Identity
+     */
+    const autoscalerPodIdentityAssociation = new eks.CfnPodIdentityAssociation(
+      this,
+      "ClusterAutoscalerPodIdentityAssociation",
+      {
+        clusterName: this.cluster.clusterName,
+        namespace: "kube-system",
+        serviceAccount: serviceAccountName,
+        roleArn: autoscalerRole.roleArn
+      }
+    );
+
+    autoscalerPodIdentityAssociation.node.addDependency(podIdentityAgent);
+    autoscalerPodIdentityAssociation.node.addDependency(autoscalerRole);
+    autoscalerPodIdentityAssociation.node.addDependency(serviceAccount);
+
+    /**
+     * Official Cluster Autoscaler Helm chart
+     */
+    const chart = this.cluster.addHelmChart(
+      "ClusterAutoscaler",
+      {
+        namespace: "kube-system",
+        repository: "https://kubernetes.github.io/autoscaler",
+        chart: "cluster-autoscaler",
+        release: "cluster-autoscaler",
+        version: props.config.clusterAutoscalerChartVersion,
+
+        values: {
+          cloudProvider: "aws",
+          awsRegion: Stack.of(this).region,
+          autoDiscovery: {
+            clusterName: this.cluster.clusterName,
+          },
+          image: {
+            tag: props.config.clusterAutoscalerImageTag,
+          },
+          serviceAccount: {
+            create: false,
+            name: serviceAccountName,
+          },
+          rbac: {
+            create: true,
+          },
+          extraArgs: {
+            "balance-similar-node-groups": "true",
+            "skip-nodes-with-system-pods": "false",
+          },
+          resources: {
+            requests: {
+              cpu: "100m",
+              memory: "300Mi"
+            },
+            limits: {
+              cpu: "500m",
+              memory: "600Mi"
+            }
+          }
+        }
+      }
+    );
+
+    chart.node.addDependency(this.nodeGroup);
+    chart.node.addDependency(podIdentityAgent);
+    chart.node.addDependency(serviceAccount);
+    chart.node.addDependency(autoscalerPodIdentityAssociation);
 
     return chart;
   }

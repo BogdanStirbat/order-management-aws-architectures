@@ -19,6 +19,9 @@ export type OrdersAppConfig = {
   metricsServerChartVersion: string;
   awsLoadBalancerControllerChartVersion: string;
 
+  clusterAutoscalerChartVersion: string;
+  clusterAutoscalerImageTag: string;
+
   eksClusterName: string;
   nodeGroupName: string;
   nodeInstanceType: string;
@@ -109,12 +112,15 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
     metricsServerChartVersion: optionalString(app, "metricsServerChartVersion", "3.13.1"),
     awsLoadBalancerControllerChartVersion: optionalString(app, "awsLoadBalancerControllerChartVersion", "3.4.2"),
 
+    clusterAutoscalerChartVersion: optionalString(app, "clusterAutoscalerChartVersion", "9.59.0"),
+    clusterAutoscalerImageTag: optionalString(app, "clusterAutoscalerImageTag", "v1.35.2"),
+
     eksClusterName: optionalString(app, "eksClusterName", "orders-app-eks"),
     nodeGroupName: optionalString(app, "nodeGroupName", "orders-app-mng"),
     nodeInstanceType: optionalString(app, "nodeInstanceType", "t3.medium"),
     nodeGroupMinSize: optionalNumber(app, "nodeGroupMinSize", 2),
     nodeGroupDesiredSize: optionalNumber(app, "nodeGroupDesiredSize", 2),
-    nodeGroupMaxSize: optionalNumber(app, "nodeGroupMaxSize", 4),
+    nodeGroupMaxSize: optionalNumber(app, "nodeGroupMaxSize", 6),
     nodeDiskSizeGb: optionalNumber(app, "nodeDiskSizeGb", 30),
 
     namespace: optionalString(app, "namespace", "orders"),
@@ -126,7 +132,7 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
 
     podReplicas: optionalNumber(app, "podReplicas", 2),
     podMinReplicas: optionalNumber(app, "podMinReplicas", 2),
-    podMaxReplicas: optionalNumber(app, "podMaxReplicas", 4),
+    podMaxReplicas: optionalNumber(app, "podMaxReplicas", 10),
     podCpuRequest: optionalString(app, "podCpuRequest", "500m"),
     podCpuLimit: optionalString(app, "podCpuLimit", "1000m"),
     podMemoryRequest: optionalString(app, "podMemoryRequest", "1024Mi"),
