@@ -119,7 +119,7 @@ export class EksStack extends Stack {
     );
 
     cdk.Tags.of(cfnNodeGroup).add(
-      `k8s.io/cluster-autoscaler/${this.cluster.clusterName}`, 
+      `k8s.io/cluster-autoscaler/${config.eksClusterName}`, 
       "owned"
     );
 
@@ -439,7 +439,7 @@ export class EksStack extends Stack {
         conditions: {
           StringEquals: {
             "aws:ResourceTag/k8s.io/cluster-autoscaler/enabled": "true",
-            [`aws:ResourceTag/k8s.io/cluster-autoscaler/${this.cluster.clusterName}`]: "owned"
+            [`aws:ResourceTag/k8s.io/cluster-autoscaler/${config.eksClusterName}`]: "owned"
           }
         }
       })
