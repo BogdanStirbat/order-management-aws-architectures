@@ -95,33 +95,28 @@ export class EksStack extends Stack {
     this.nodeGroup = this.cluster.addNodegroupCapacity("ManagedNodeGroup", {
       nodegroupName: config.nodeGroupName,
       subnets: { subnets: props.appSubnets },
+
       minSize: config.nodeGroupMinSize,
       desiredSize: config.nodeGroupDesiredSize,
       maxSize: config.nodeGroupMaxSize,
+
       diskSize: config.nodeDiskSizeGb,
+
       instanceTypes: [new ec2.InstanceType(config.nodeInstanceType)],
+
       amiType: eks.NodegroupAmiType.AL2023_X86_64_STANDARD,
       capacityType: eks.CapacityType.ON_DEMAND,
+
       remoteAccess: undefined,
+
+      tags: {
+        "k8s.io/cluster-autoscaler/enabled": "true",
+        [`k8s.io/cluster-autoscaler/${config.eksClusterName}`]: "owned"
+      }
     });
 
     props.appRepository.grantPull(this.nodeGroup.role);
     props.adotRepository.grantPull(this.nodeGroup.role);
-
-    /**
-     * Cluster Autoscaler auto-discovery tags
-     */
-    const cfnNodeGroup = this.nodeGroup.node.defaultChild as eks.CfnNodegroup;
-
-    cdk.Tags.of(cfnNodeGroup).add(
-      "k8s.io/cluster-autoscaler/enabled", 
-      "true"
-    );
-
-    cdk.Tags.of(cfnNodeGroup).add(
-      `k8s.io/cluster-autoscaler/${config.eksClusterName}`, 
-      "owned"
-    );
 
     /**
      * EKS Pod Identity Agent
