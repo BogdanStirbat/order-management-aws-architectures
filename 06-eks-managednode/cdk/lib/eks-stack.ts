@@ -705,6 +705,26 @@ export class EksStack extends Stack {
       },
     };
 
+    const podDisruptionBudget = {
+      apiVersion: "policy/v1",
+      kind: "PodDisruptionBudget",
+
+      metadata: {
+        name: `${config.appName}-pdb`,
+        namespace: config.namespace
+      },
+
+      spec: {
+        minAvailable: "50%",
+
+        selector: {
+          matchLabels: {
+            app: config.appName
+          }
+        }
+      }
+    };
+
     const targetGroupBinding = {
       apiVersion: "elbv2.k8s.aws/v1beta1",
       kind: "TargetGroupBinding",
@@ -729,6 +749,7 @@ export class EksStack extends Stack {
       deployment,
       service,
       hpa,
+      podDisruptionBudget,
       targetGroupBinding,
     );
   }
