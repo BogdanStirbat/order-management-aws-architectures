@@ -582,6 +582,28 @@ export class EksStack extends Stack {
           spec: {
             serviceAccountName: `${config.appName}-sa`,
             terminationGracePeriodSeconds: 60,
+            topologySpreadConstraints: [
+              {
+                maxSkew: 1,
+                topologyKey: "topology.kubernetes.io/zone",
+                whenUnsatisfiable: "ScheduleAnyway",
+                labelSelector: {
+                  matchLabels: {
+                    app: config.appName
+                  }
+                }
+              },
+              {
+                maxSkew: 1,
+                topologyKey: "kubernetes.io/hostname",
+                whenUnsatisfiable: "ScheduleAnyway",
+                labelSelector: {
+                  matchLabels: {
+                    app: config.appName
+                  }
+                }
+              }
+            ],
             volumes: [
               {
                 name: "rds-secret",
