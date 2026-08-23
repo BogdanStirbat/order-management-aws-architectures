@@ -535,12 +535,22 @@ export class EksStack extends Stack {
     /**
      * IAM role for the collector
      */
+    const adotPrincipal = 
+      new iam.ServicePrincipal("pods.eks.amazonaws.com")
+        .withSessionTags()
+        .withConditions({
+          StringEquals: {
+            "aws:RequestTag/kubernetes-namespace": namespace,
+            "aws:RequestTag/kubernetes-service-account": serviceAccountName
+          }
+        });
+
     const adotRole = new iam.Role(
       this,
       "AdotCollectorPodIdentityRole",
       {
         roleName: `${config.eksClusterName}-adot-collector`,
-        assumedBy: new iam.ServicePrincipal("pods.eks.amazonaws.com").withSessionTags(),
+        assumedBy: adotPrincipal,
         description: "Pod Identity role for the ADOT Collector"
       }
     );
