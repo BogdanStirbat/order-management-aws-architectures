@@ -610,7 +610,7 @@ processors:
   memory_limiter:
     check_interval: 1s
     limit_percentage: 80
-    spike_limit_percentage: 20
+    spike_limit_percentage: 15
 
   batch:
 
