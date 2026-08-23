@@ -150,8 +150,15 @@ export class EksStack extends Stack {
      */
     const appSecretsRole = new iam.Role(this, "OrdersAppSecretsRole", {
       roleName: `${config.appName}-secrets-pod-identity-role`,
-      assumedBy: new iam.ServicePrincipal(
-        "pods.eks.amazonaws.com").withSessionTags(),
+      assumedBy: new iam.ServicePrincipal("pods.eks.amazonaws.com")
+        .withSessionTags()
+        .withConditions({
+          StringEquals: {
+            "aws:RequestTag/eks-cluster-name": this.cluster.clusterName,
+            "aws:RequestTag/kubernetes-namespace": config.namespace,
+            "aws:RequestTag/kubernetes-service-account": appServiceAccountName
+          }
+        }),
       description:
         "Allows the Orders application pod to retrieve its RDS secret",
     });
@@ -390,7 +397,15 @@ export class EksStack extends Stack {
       "ClusterAutoscalerPodIdentityRole",
       {
         roleName: `${props.config.eksClusterName}-cluster-autoscaler`,
-        assumedBy: new iam.ServicePrincipal("pods.eks.amazonaws.com").withSessionTags(),
+        assumedBy: new iam.ServicePrincipal("pods.eks.amazonaws.com")
+          .withSessionTags()
+          .withConditions({
+            StringEquals: {
+              "aws:RequestTag/eks-cluster-name": this.cluster.clusterName,
+              "aws:RequestTag/kubernetes-namespace": config.namespace,
+              "aws:RequestTag/kubernetes-service-account": serviceAccountName
+            }
+          }),
         description: "Pod Identity role for Kubernetes Cluster Autoscaler"
       }
     );
