@@ -911,6 +911,7 @@ service:
                   { name: "COGNITO_ISSUER_URI", value: props.cognitoIssuerUri },
                   { name: "COGNITO_USER_POOL_CLIENT_ID", value: props.cognitoUserPoolClientId },
                   { name: "OTEL_EXPORTER_OTLP_ENDPOINT", value: "http://adot-collector.kube-system.svc.cluster.local:4318" },
+                  { name: "OTEL_EXPORTER_OTLP_PROTOCOL", value: "http/protobuf" },
                 ],
                 resources: {
                   requests: { cpu: config.podCpuRequest, memory: config.podMemoryRequest },
