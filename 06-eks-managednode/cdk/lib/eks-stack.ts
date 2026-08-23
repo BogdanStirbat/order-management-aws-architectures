@@ -1030,6 +1030,7 @@ service:
       "OrdersAppKubernetesResources",
       namespace,
       serviceAccount,
+      secretProviderClass,
       deployment,
       service,
       hpa,
