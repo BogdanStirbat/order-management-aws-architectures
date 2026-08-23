@@ -593,9 +593,9 @@ receivers:
 
 processors:
   memory_limiter:
-    check_interval: 5s
-    limit_mib: 256
-    spike_limit_mib: 64
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 60
 
   batch:
 
