@@ -278,10 +278,9 @@ export class EksStack extends Stack {
         .withSessionTags()
         .withConditions({
           StringEquals: {
-            "aws:RequestTag/kubernetes-namespace":
-              "kube-system",
-            "aws:RequestTag/kubernetes-service-account":
-              controllerServiceAccountName,
+            "aws:RequestTag/eks-cluster-name": this.cluster.clusterName,
+            "aws:RequestTag/kubernetes-namespace": "kube-system",
+            "aws:RequestTag/kubernetes-service-account": controllerServiceAccountName,
           },
         });
 
@@ -540,6 +539,7 @@ export class EksStack extends Stack {
         .withSessionTags()
         .withConditions({
           StringEquals: {
+            "aws:RequestTag/eks-cluster-name": this.cluster.clusterName,
             "aws:RequestTag/kubernetes-namespace": namespace,
             "aws:RequestTag/kubernetes-service-account": serviceAccountName
           }
