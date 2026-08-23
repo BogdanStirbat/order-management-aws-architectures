@@ -208,13 +208,10 @@ export class EksStack extends Stack {
       description: "HTTPS from EKS",
     });
 
-    this.nodeGroup.role.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName("AWSXRayDaemonWriteAccess"),
-    );
-
     const metricsServer = this.installMetricsServer(props);
     const loadBalancerController = this.installAwsLoadBalancerController(props, podIdentityAgent);
     const clusterAutoscaler = this.installClusterAutoscaler(props, podIdentityAgent);
+    const adotCollector = this.installAdotDaemonSet(props, podIdentityAgent);
     const appResources = this.installApplication(props);
 
     appResources.node.addDependency(this.nodeGroup);
@@ -223,6 +220,7 @@ export class EksStack extends Stack {
     appResources.node.addDependency(podIdentityAssociation);
     appResources.node.addDependency(loadBalancerController);
     appResources.node.addDependency(clusterAutoscaler);
+    appResources.node.addDependency(adotCollector);
     appResources.node.addDependency(metricsServer);
 
     new cdk.CfnOutput(this, "EksClusterName", { value: this.cluster.clusterName });
@@ -510,6 +508,273 @@ export class EksStack extends Stack {
     chart.node.addDependency(autoscalerPodIdentityAssociation);
 
     return chart;
+  }
+
+  private installAdotDaemonSet(props: EksStackProps, podIdentityAgent: eks.CfnAddon): eks.KubernetesManifest {
+    const { config } = props;
+
+    const namespace = "kube-system";
+    const serviceAccountName = "adot-collector";
+    const collectorName = "adot-collector";
+
+    /**
+     * Kubernetes ServiceAccount
+     */
+    const serviceAccount = this.cluster.addManifest(
+      "AdotCollectorServiceAccount",
+      {
+        apiVersion: "v1",
+        kind: "ServiceAccount",
+        metadata: {
+          name: serviceAccountName,
+          namespace
+        }
+      }
+    );
+
+    /**
+     * IAM role for the collector
+     */
+    const adotRole = new iam.Role(
+      this,
+      "AdotCollectorPodIdentityRole",
+      {
+        roleName: `${config.eksClusterName}-adot-collector`,
+        assumedBy: new iam.ServicePrincipal("pods.eks.amazonaws.com").withSessionTags(),
+        description: "Pod Identity role for the ADOT Collector"
+      }
+    );
+
+    /**
+     * Ensure that the ADOT DaemonSet has X-Ray write permissions
+     */
+    adotRole.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName("AWSXRayDaemonWriteAccess")
+    );
+
+    /**
+     * AdotCollector PodIdentityAssociation
+     */
+    const podIdentityAssociation = new eks.CfnPodIdentityAssociation(
+      this,
+      "AdotCollectorPodIdentityAssociation",
+      {
+        clusterName: this.cluster.clusterName,
+        namespace,
+        serviceAccount: serviceAccountName,
+        roleArn: adotRole.roleArn
+      }
+    );
+
+    podIdentityAgent.node.addDependency(adotRole);
+    podIdentityAgent.node.addDependency(serviceAccount);
+
+    const collectorConfig = `
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+    
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 256
+    spike_limit_mib: 64
+
+  batch:
+
+exporters:
+  awsxray:
+    region: ${Stack.of(this).region}
+
+service:
+  extensions:
+    - health_check
+
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - memory_limiter
+        - batch
+      exporters:
+        - awsxray
+    `.trim();
+
+    /**
+     * ADOT Collector ConfigMap
+     */
+    const configMap = {
+      apiVersion: "v1",
+      kind: "ConfigMap",
+      metadata: {
+        name: `${collectorName}-config`,
+        namespace
+      },
+      data: {
+        "otel-config.yaml": collectorConfig
+      }
+    };
+
+    /**
+     * ADOT Collector DaemonSet
+     */
+    const daemonSet = {
+      apiVersion: "apps/v1",
+      kind: "DaemonSet",
+      metadata: {
+        name: collectorName,
+        namespace,
+        labels: {
+          app: collectorName
+        }
+      },
+      spec: {
+        selector: {
+          matchLabels: {
+            app: collectorName,
+          }
+        },
+        updateStrategy: {
+          type: "RollingUpdate",
+          rollingUpdate: { maxUnavailable: 0, maxSurge: 1 },
+        },
+        template: {
+          metadata: {
+            labels: {
+              app: collectorName,
+            }
+          },
+          spec: {
+            serviceAccountName,
+            /**
+             * Restrict the DaemonSet to this managed node group.
+             * EKS applies this label to managed node group nodes.
+             */
+            nodeSelector: {
+              "eks.amazonaws.com/nodegroup": config.nodeGroupName
+            },
+            terminationGracePeriodSeconds: 30,
+            containers: [
+              {
+                name: "adot-collector",
+                image: props.adotRepository.repositoryUriForTag(config.adotImageTag),
+                imagePullPolicy: "Always",
+                args: [
+                  "--config=/etc/adot/otel-config.yaml",
+                ],
+                ports: [
+                  {
+                    name: "otlp-http",
+                    containerPort: 4318,
+                    protocol: "TCP"
+                  },
+                  {
+                    name: "health",
+                    containerPort: 13133,
+                    protocol: "TCP",
+                  }
+                ],
+                resources: {
+                  requests: {
+                    cpu: config.adotCpuRequest,
+                    memory: config.adotMemoryLimit
+                  },
+                  limits: {
+                    cpu: config.adotCpuLimit,
+                    memory: config.adotMemoryLimit
+                  }
+                },
+                volumeMounts: [
+                  {
+                    name: "config",
+                    mountPath: "/etc/adot",
+                    readOnly: true
+                  }
+                ],
+                readinessProbe: {
+                  httpGet: {
+                    path: "/",
+                    port: 13133
+                  },
+                  initialDelaySeconds: 5,
+                  periodSeconds: 10,
+                  timeoutSeconds: 3,
+                  failureThreshold: 3
+                },
+                livenessProbe: {
+                  httpGet: {
+                    path: "/",
+                    port: 13133
+                  },
+                  initialDelaySeconds: 10,
+                  periodSeconds: 30,
+                  timeoutSeconds: 3,
+                  failureThreshold: 3
+                }
+              }
+            ],
+            volumes: [
+              {
+                name: "config",
+                configMap: {
+                  name: `${collectorName}-config`
+                }
+              }
+            ]
+          }
+        }
+      },
+    };
+
+    /**
+     * ADOT Service
+     * 
+     * Provides stable ADOT endpoint for applications
+     */
+    const service = {
+      apiVersion: "v1",
+      kind: "Service",
+      metadata: {
+        name: collectorName,
+        namespace,
+      },
+      spec: {
+        type: "ClusterIP",
+        selector: {
+          app: collectorName
+        },
+        trafficDistribution: "PreferSameNode",
+        ports: [
+          {
+            name: "otlp-http",
+            port: 4318,
+            targetPort: 4318,
+            protocol: "TCP"
+          }
+        ]
+      }
+    };
+
+    const manifest = this.cluster.addManifest(
+      "AdotCollectorDaemonSet",
+      configMap,
+      daemonSet,
+      service
+    );
+
+    manifest.node.addDependency(this.nodeGroup);
+    manifest.node.addDependency(podIdentityAgent);
+    manifest.node.addDependency(serviceAccount);
+    manifest.node.addDependency(podIdentityAssociation);
+
+    return manifest;
   }
 
   private installApplication(props: EksStackProps): eks.KubernetesManifest {
