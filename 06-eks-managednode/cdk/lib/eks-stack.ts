@@ -396,7 +396,7 @@ export class EksStack extends Stack {
       this,
       "ClusterAutoscalerPodIdentityRole",
       {
-        roleName: `${props.config.eksClusterName}-cluster-autoscaler`,
+        roleName: `${config.eksClusterName}-cluster-autoscaler`,
         assumedBy: new iam.ServicePrincipal("pods.eks.amazonaws.com")
           .withSessionTags()
           .withConditions({
@@ -480,7 +480,7 @@ export class EksStack extends Stack {
         repository: "https://kubernetes.github.io/autoscaler",
         chart: "cluster-autoscaler",
         release: "cluster-autoscaler",
-        version: props.config.clusterAutoscalerChartVersion,
+        version: config.clusterAutoscalerChartVersion,
 
         values: {
           cloudProvider: "aws",
@@ -489,7 +489,7 @@ export class EksStack extends Stack {
             clusterName: this.cluster.clusterName,
           },
           image: {
-            tag: props.config.clusterAutoscalerImageTag,
+            tag: config.clusterAutoscalerImageTag,
           },
           serviceAccount: {
             create: false,
