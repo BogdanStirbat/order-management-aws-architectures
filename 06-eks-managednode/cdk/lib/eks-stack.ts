@@ -900,7 +900,7 @@ service:
                   { name: "SPRING_DATASOURCE_USERNAME", value: "postgres" },
                   { name: "COGNITO_ISSUER_URI", value: props.cognitoIssuerUri },
                   { name: "COGNITO_USER_POOL_CLIENT_ID", value: props.cognitoUserPoolClientId },
-                  { name: "OTEL_EXPORTER_OTLP_ENDPOINT", value: "http://localhost:4318" },
+                  { name: "OTEL_EXPORTER_OTLP_ENDPOINT", value: "http://adot-collector.kube-system.svc.cluster.local:4318" },
                 ],
                 resources: {
                   requests: { cpu: config.podCpuRequest, memory: config.podMemoryRequest },
@@ -920,21 +920,7 @@ service:
                   timeoutSeconds: 5,
                   failureThreshold: 3,
                 },
-              },
-              {
-                name: "adot-collector",
-                image: props.adotRepository.repositoryUriForTag(config.adotImageTag),
-                imagePullPolicy: "Always",
-                args: ["--config=/etc/otel-config.yaml"],
-                ports: [
-                  { containerPort: 4318 },
-                  { containerPort: 13133 },
-                ],
-                resources: {
-                  requests: { cpu: config.adotCpuRequest, memory: config.adotMemoryRequest },
-                  limits: { cpu: config.adotCpuLimit, memory: config.adotMemoryLimit },
-                },
-              },
+              }
             ],
           },
         },
