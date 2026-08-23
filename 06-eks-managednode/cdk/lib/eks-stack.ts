@@ -566,8 +566,9 @@ export class EksStack extends Stack {
       }
     );
 
-    podIdentityAgent.node.addDependency(adotRole);
-    podIdentityAgent.node.addDependency(serviceAccount);
+    podIdentityAssociation.node.addDependency(podIdentityAgent);
+    podIdentityAssociation.node.addDependency(serviceAccount);
+    podIdentityAssociation.node.addDependency(adotRole);
 
     const collectorConfig = `
 extensions:
