@@ -12,7 +12,6 @@ import { KubectlV35Layer } from "@aws-cdk/lambda-layer-kubectl-v35";
 import type { OrdersAppConfig } from "./config";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { NamespaceType } from "aws-cdk-lib/aws-servicediscovery";
 
 function loadJsonPolicyFromProjectRoot(relativePath: string): iam.PolicyDocument {
   const absolutePath = path.resolve(process.cwd(), relativePath);
@@ -804,7 +803,7 @@ service:
       apiVersion: "v1",
       kind: "ServiceAccount",
       metadata: {
-        name: `${config.appName}-sa`,
+        name: appServiceAccountName,
         namespace: config.namespace,
       },
     };
@@ -813,7 +812,7 @@ service:
       apiVersion: "secrets-store.csi.x-k8s.io/v1",
       kind: "SecretProviderClass",
       metadata: {
-        name: `${config.appName}-rds`,
+        name: secretProviderClassName,
         namespace: config.namespace,
       },
       spec: {
@@ -856,7 +855,7 @@ service:
         template: {
           metadata: { labels: { app: config.appName } },
           spec: {
-            serviceAccountName: `${config.appName}-sa`,
+            serviceAccountName: appServiceAccountName,
             terminationGracePeriodSeconds: 60,
             topologySpreadConstraints: [
               {
@@ -887,7 +886,7 @@ service:
                   driver: "secrets-store.csi.k8s.io",
                   readOnly: true,
                   volumeAttributes: {
-                    secretProviderClass: `${config.appName}-rds`,
+                    secretProviderClass: secretProviderClassName,
                   },
                 },
               },
