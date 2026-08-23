@@ -10,6 +10,7 @@ import * as rds from "aws-cdk-lib/aws-rds";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { KubectlV35Layer } from "@aws-cdk/lambda-layer-kubectl-v35";
 import type { OrdersAppConfig } from "./config";
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -617,6 +618,10 @@ service:
         - awsxray
     `.trim();
 
+    const collectorConfigHash = createHash("sha256")
+      .update(collectorConfig)
+      .digest("hex");
+
     /**
      * ADOT Collector ConfigMap
      */
@@ -659,6 +664,9 @@ service:
           metadata: {
             labels: {
               app: collectorName,
+            },
+            annotations: {
+              "checksum/config": collectorConfigHash
             }
           },
           spec: {
