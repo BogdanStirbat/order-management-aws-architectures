@@ -635,7 +635,7 @@ export class EksStack extends Stack {
                   { name: "SPRING_DATASOURCE_USERNAME", value: "postgres" },
                   { name: "COGNITO_ISSUER_URI", value: props.cognitoIssuerUri },
                   { name: "COGNITO_USER_POOL_CLIENT_ID", value: props.cognitoUserPoolClientId },
-                  { name: "OTEL_EXPORTER_OTLP_ENDPOINT", value: "http://localhost:4318/v1/traces" },
+                  { name: "OTEL_EXPORTER_OTLP_ENDPOINT", value: "http://localhost:4318" },
                 ],
                 resources: {
                   requests: { cpu: config.podCpuRequest, memory: config.podMemoryRequest },
