@@ -695,7 +695,7 @@ service:
                 resources: {
                   requests: {
                     cpu: config.adotCpuRequest,
-                    memory: config.adotMemoryLimit
+                    memory: config.adotMemoryRequest
                   },
                   limits: {
                     cpu: config.adotCpuLimit,
