@@ -849,6 +849,7 @@ service:
       spec: {
         provider: "aws",
         parameters: {
+          region: Stack.of(this).region,
           usePodIdentity: "true",
           objects: objectsString
         }
