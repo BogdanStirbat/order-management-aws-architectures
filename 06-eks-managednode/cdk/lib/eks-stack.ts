@@ -831,31 +831,28 @@ service:
       },
     };
 
+    const objectsString = `
+- objectName: "${props.dbSecret.secretArn}"
+  objectType: "secretsmanager"
+  jmesPath:
+    - path: "password"
+      objectAlias: "spring.datasource.password"
+    `.trim();
+
     const secretProviderClass = {
       apiVersion: "secrets-store.csi.x-k8s.io/v1",
       kind: "SecretProviderClass",
       metadata: {
         name: secretProviderClassName,
-        namespace: config.namespace,
+        namespace: config.namespace
       },
       spec: {
         provider: "aws",
         parameters: {
           usePodIdentity: "true",
-          objects: [
-            {
-              objectName: props.dbSecret.secretArn,
-              objectType: "secretsmanager",
-              jmesPath: [
-                {
-                  path: "password",
-                  objectAlias: "spring.datasource.password",
-                },
-              ],
-            },
-          ],
-        },
-      },
+          objects: objectsString
+        }
+      }
     };
 
     const jdbcUrl = `jdbc:postgresql://${props.db.dbInstanceEndpointAddress}:${props.db.dbInstanceEndpointPort}/${config.dbName}`;
