@@ -372,6 +372,7 @@ export class EksStack extends Stack {
   private installClusterAutoscaler(props: EksStackProps, podIdentityAgent: eks.CfnAddon): eks.HelmChart {
     const { config } = props;
 
+    const namespace = "kube-system";
     const serviceAccountName = "cluster-autoscaler";
 
     /**
@@ -384,7 +385,7 @@ export class EksStack extends Stack {
         kind: "ServiceAccount",
         metadata: {
           name: serviceAccountName,
-          namespace: "kube-system"
+          namespace: namespace
         }
       }
     );
@@ -402,7 +403,7 @@ export class EksStack extends Stack {
           .withConditions({
             StringEquals: {
               "aws:RequestTag/eks-cluster-name": this.cluster.clusterName,
-              "aws:RequestTag/kubernetes-namespace": "kube-system",
+              "aws:RequestTag/kubernetes-namespace": namespace,
               "aws:RequestTag/kubernetes-service-account": serviceAccountName
             }
           }),
@@ -460,7 +461,7 @@ export class EksStack extends Stack {
       "ClusterAutoscalerPodIdentityAssociation",
       {
         clusterName: this.cluster.clusterName,
-        namespace: "kube-system",
+        namespace: namespace,
         serviceAccount: serviceAccountName,
         roleArn: autoscalerRole.roleArn
       }
@@ -476,7 +477,7 @@ export class EksStack extends Stack {
     const chart = this.cluster.addHelmChart(
       "ClusterAutoscaler",
       {
-        namespace: "kube-system",
+        namespace: namespace,
         repository: "https://kubernetes.github.io/autoscaler",
         chart: "cluster-autoscaler",
         release: "cluster-autoscaler",
