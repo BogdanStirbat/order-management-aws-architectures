@@ -14,8 +14,6 @@ export type OrdersAppConfig = {
   dbBackupRetentionDays: number;
   dbDeletionProtection: boolean;
 
-  useNatGateway: boolean;
-
   metricsServerChartVersion: string;
   awsLoadBalancerControllerChartVersion: string;
 
@@ -104,10 +102,6 @@ export function loadConfig(app: cdk.App): OrdersAppConfig {
     dbAllocatedStorageGb: optionalNumber(app, "dbAllocatedStorageGb", 20),
     dbBackupRetentionDays: optionalNumber(app, "dbBackupRetentionDays", 7),
     dbDeletionProtection: optionalBool(app, "dbDeletionProtection", false),
-
-    // For learning EKS, NAT makes add-ons and image pulls much easier.
-    // Set -c useNatGateway=false only if you also mirror all needed images and keep the VPC endpoints complete.
-    useNatGateway: optionalBool(app, "useNatGateway", true),
 
     metricsServerChartVersion: optionalString(app, "metricsServerChartVersion", "3.13.1"),
     awsLoadBalancerControllerChartVersion: optionalString(app, "awsLoadBalancerControllerChartVersion", "3.4.2"),

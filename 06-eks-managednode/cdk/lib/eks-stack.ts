@@ -54,7 +54,6 @@ export interface EksStackProps extends StackProps {
 
   albSecurityGroup: ec2.ISecurityGroup;
   dbSecurityGroup: ec2.ISecurityGroup;
-  endpointsSecurityGroup: ec2.ISecurityGroup;
 
   dbSecret: secretsmanager.ISecret;
   db: rds.DatabaseInstance;
@@ -203,16 +202,6 @@ export class EksStack extends Stack {
       fromPort: 5432,
       toPort: 5432,
       description: "PostgreSQL from EKS",
-    });
-
-    new ec2.CfnSecurityGroupIngress(this, "EksToEndpointsIngress", {
-      groupId: props.endpointsSecurityGroup.securityGroupId,
-      sourceSecurityGroupId:
-        this.cluster.clusterSecurityGroup.securityGroupId,
-      ipProtocol: "tcp",
-      fromPort: 443,
-      toPort: 443,
-      description: "HTTPS from EKS",
     });
 
     const metricsServer = this.installMetricsServer(props);

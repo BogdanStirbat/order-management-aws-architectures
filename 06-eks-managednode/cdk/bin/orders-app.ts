@@ -6,7 +6,6 @@ import { NetworkStack } from "../lib/network-stack";
 import { DatabaseStack } from "../lib/database-stack";
 import { AlbStack } from "../lib/alb-stack";
 import { CognitoStack } from "../lib/cognito-stack";
-import { ApiStack } from "../lib/api-stack";
 import { EksStack } from "../lib/eks-stack";
 import { MonitoringStack } from "../lib/monitoring-stack";
 
@@ -39,22 +38,12 @@ const database = new DatabaseStack(app, "OrdersApp-Database", {
 const alb = new AlbStack(app, "OrdersApp-Alb", {
   env,
   vpc: network.vpc,
-  appSubnets: network.appSubnets,
+  publicSubnets: network.publicSubnets,
   albSecurityGroup: network.albSecurityGroup,
   config,
 });
 
 const cognito = new CognitoStack(app, "OrdersApp-Cognito", { env });
-
-const api = new ApiStack(app, "OrdersApp-Api", {
-  env,
-  vpc: network.vpc,
-  appSubnets: network.appSubnets,
-  vpcLinkSecurityGroup: network.vpcLinkSecurityGroup,
-  albListener: alb.httpListener,
-  userPool: cognito.userPool,
-  userPoolClient: cognito.userPoolClient,
-});
 
 const eks = new EksStack(app, "OrdersApp-Eks", {
   env,
@@ -62,7 +51,6 @@ const eks = new EksStack(app, "OrdersApp-Eks", {
   appSubnets: network.appSubnets,
   albSecurityGroup: network.albSecurityGroup,
   dbSecurityGroup: network.dbSecurityGroup,
-  endpointsSecurityGroup: network.endpointsSg,
   dbSecret: database.secret,
   db: database.db,
   appRepository: ecrRepository.appRepository,
@@ -79,7 +67,5 @@ new MonitoringStack(app, "OrdersApp-Monitoring", {
   alb: alb.alb,
   targetGroup: alb.targetGroup,
   db: database.db,
-  httpApi: api.httpApi,
-  apiAccessLogGroup: api.accessLogGroup,
-  config,
+  config
 });

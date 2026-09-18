@@ -4,11 +4,9 @@ import { Construct } from "constructs";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as cloudwatchActions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
-import * as logs from "aws-cdk-lib/aws-logs";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
-import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as eks from "aws-cdk-lib/aws-eks";
 import type { OrdersAppConfig } from "./config";
 
@@ -17,8 +15,6 @@ export interface MonitoringStackProps extends StackProps {
   alb: elbv2.ApplicationLoadBalancer;
   targetGroup: elbv2.ApplicationTargetGroup;
   db: rds.DatabaseInstance;
-  httpApi: apigwv2.HttpApi;
-  apiAccessLogGroup: logs.ILogGroup;
   config: OrdersAppConfig;
 }
 
@@ -115,51 +111,6 @@ export class MonitoringStack extends Stack {
     });
     addAlarmActions(rdsConnectionsAlarm);
 
-    const api4xxAlarm = new cloudwatch.Alarm(this, "ApiGateway4xxAlarm", {
-      alarmName: "orders-app-eks-apigw-4xx",
-      metric: new cloudwatch.Metric({
-        namespace: "AWS/ApiGateway",
-        metricName: "4xx",
-        dimensionsMap: { ApiId: props.httpApi.apiId, Stage: "$default" },
-        statistic: "Sum",
-        period: Duration.minutes(5),
-      }),
-      threshold: 20,
-      evaluationPeriods: 2,
-      datapointsToAlarm: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: "High API Gateway 4XX responses",
-    });
-    addAlarmActions(api4xxAlarm);
-
-    const api5xxAlarm = new cloudwatch.Alarm(this, "ApiGateway5xxAlarm", {
-      alarmName: "orders-app-eks-apigw-5xx",
-      metric: new cloudwatch.Metric({
-        namespace: "AWS/ApiGateway",
-        metricName: "5xx",
-        dimensionsMap: { ApiId: props.httpApi.apiId, Stage: "$default" },
-        statistic: "Sum",
-        period: Duration.minutes(5),
-      }),
-      threshold: 5,
-      evaluationPeriods: 1,
-      datapointsToAlarm: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: "High API Gateway 5XX responses",
-    });
-    addAlarmActions(api5xxAlarm);
-
-    new logs.MetricFilter(this, "ApiJwtAuthorizerFailureMetricFilter", {
-      logGroup: props.apiAccessLogGroup,
-      metricNamespace: "OrdersApp",
-      metricName: "ApiJwtAuthorizerFailureCount",
-      filterPattern: logs.FilterPattern.literal('{ $.authorizerError = "*" }'),
-      metricValue: "1",
-      defaultValue: 0,
-    });
-
     const apiJwtAuthorizerFailureMetric = new cloudwatch.Metric({
       namespace: "OrdersApp",
       metricName: "ApiJwtAuthorizerFailureCount",
@@ -214,15 +165,7 @@ export class MonitoringStack extends Stack {
           db.metricDatabaseConnections({ period: Duration.minutes(5), statistic: "Average" }),
         ],
         width: 12,
-      }),
-      new cloudwatch.GraphWidget({
-        title: "API Gateway - 4XX / 5XX",
-        left: [
-          new cloudwatch.Metric({ namespace: "AWS/ApiGateway", metricName: "4xx", dimensionsMap: { ApiId: props.httpApi.apiId, Stage: "$default" }, statistic: "Sum", period: Duration.minutes(5) }),
-          new cloudwatch.Metric({ namespace: "AWS/ApiGateway", metricName: "5xx", dimensionsMap: { ApiId: props.httpApi.apiId, Stage: "$default" }, statistic: "Sum", period: Duration.minutes(5) }),
-        ],
-        width: 12,
-      }),
+      })
     );
 
     this.dashboard.addWidgets(new cloudwatch.GraphWidget({

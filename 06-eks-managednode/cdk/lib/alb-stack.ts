@@ -8,7 +8,7 @@ import type { OrdersAppConfig } from "./config";
 
 export interface AlbStackProps extends StackProps {
   vpc: ec2.IVpc;
-  appSubnets: ec2.ISubnet[];
+  publicSubnets: ec2.ISubnet[];
   albSecurityGroup: ec2.ISecurityGroup;
   config: OrdersAppConfig;
 }
@@ -33,8 +33,8 @@ export class AlbStack extends Stack {
     this.alb = new elbv2.ApplicationLoadBalancer(this, "OrdersAlb", {
       loadBalancerName: "orders-app-eks-alb",
       vpc: props.vpc,
-      internetFacing: false,
-      vpcSubnets: { subnets: props.appSubnets },
+      internetFacing: true,
+      vpcSubnets: { subnets: props.publicSubnets },
       securityGroup: props.albSecurityGroup,
     });
 
