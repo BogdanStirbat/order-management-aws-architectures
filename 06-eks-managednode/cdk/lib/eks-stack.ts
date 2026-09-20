@@ -185,14 +185,11 @@ export class EksStack extends Stack {
     /**
      * Security Groups Ingress
      */
-    new ec2.CfnSecurityGroupIngress(this, "AlbToEksIngress", {
-      groupId: this.cluster.clusterSecurityGroup.securityGroupId,
-      sourceSecurityGroupId: props.albSecurityGroup.securityGroupId,
-      ipProtocol: "tcp",
-      fromPort: config.appPort,
-      toPort: config.appPort,
-      description: "Application traffic from ALB",
-    });
+    this.cluster.clusterSecurityGroup.addIngressRule(
+      props.albSecurityGroup,
+      ec2.Port.tcp(config.appPort),
+      "Application Traffic from ALB"
+    );
 
     new ec2.CfnSecurityGroupIngress(this, "EksToDbIngress", {
       groupId: props.dbSecurityGroup.securityGroupId,
