@@ -54,6 +54,8 @@ export class AlbStack extends Stack {
       },
     });
 
+    // in order to configure HTTPS, the clients must provide a custom DNS + custom TLS certificate
+    // since no managed TLS certificate is provided for the ALB-provided DNS name
     this.httpListener = this.alb.addListener("HttpListener", {
       port: 80,
       open: false,

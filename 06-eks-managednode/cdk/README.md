@@ -144,7 +144,7 @@ export ALB_DNS=$(aws cloudformation describe-stacks \
 ```
 
 ```
-export API_URL="https://${ALB_DNS}"
+export API_URL="http://${ALB_DNS}"
 ```
 
 ```

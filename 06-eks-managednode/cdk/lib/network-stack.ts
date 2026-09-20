@@ -63,10 +63,12 @@ export class NetworkStack extends Stack {
     });
 
     // Ingress Rules
+    // in order to configure HTTPS, the clients must provide a custom DNS + custom TLS certificate
+    // since no managed TLS certificate is provided for the ALB-provided DNS name
     this.albSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'HTTPS from clients on the internet'
+      ec2.Port.tcp(80),
+      'HTTP from clients on the internet'
     );
 
     this.vpc.addGatewayEndpoint("S3Endpoint", {
