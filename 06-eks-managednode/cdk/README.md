@@ -110,7 +110,6 @@ cdk deploy OrdersApp-Network \
   OrdersApp-Database \ 
   OrdersApp-Alb \ 
   OrdersApp-Cognito \ 
-  OrdersApp-Api \
   OrdersApp-Eks \
   OrdersApp-Monitoring
 ```
@@ -139,8 +138,8 @@ Execute the following commands:
 
 ```
 export API_URL=$(aws cloudformation describe-stacks \
-  --stack-name OrdersApp-Api \
-  --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+  --stack-name OrdersApp-Alb \
+  --query "Stacks[0].Outputs[?OutputKey=='AlbDnsName'].OutputValue" \
   --output text) 
 ```
 
@@ -196,7 +195,7 @@ export ID_TOKEN=$(aws cognito-idp initiate-auth \
 
 ```
 
-Call API Gateway
+Call Application Load Balancer
 
 ```
 curl -i -X POST "$API_URL/orders" \
