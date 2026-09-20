@@ -137,10 +137,14 @@ After the OrdersApp-Eks stack is deployed, the following should happen:
 Execute the following commands:
 
 ```
-export API_URL=$(aws cloudformation describe-stacks \
+export ALB_DNS=$(aws cloudformation describe-stacks \
   --stack-name OrdersApp-Alb \
   --query "Stacks[0].Outputs[?OutputKey=='AlbDnsName'].OutputValue" \
   --output text) 
+```
+
+```
+export API_URL="https://${ALB_DNS}"
 ```
 
 ```
@@ -212,7 +216,7 @@ Expected result:
 The response should include an order similar to:
 ```
 {
-  "id": "91",
+  "id": 91,
   "version": 0,
   "status": "CREATED",
   "totalAmount": 49.99,
@@ -222,7 +226,7 @@ The response should include an order similar to:
 
 Verify the following:
 - Request is authenticated via Cognito
-- Routed through API Gateway → ALB → EKS
+- Routed through ALB → EKS → Spring Security validates JWT
 - Application responds successfully
 
 ### Step 11. Verify database interaction
@@ -252,7 +256,7 @@ You can override defaults using CDK context. Example:
 
 ```
 cdk deploy \ 
-  -c useNatGateway=false \ 
+  -c dbInstanceClass=t4g.micro \ 
   -c dbName=mydb 
 ```
 
@@ -275,7 +279,6 @@ You can find more information in the `cdk/lib/config.ts` file.
 ### X-Ray not receiving traces
 - Ensure ADOT collector is running
 - Verify X-Ray IAM permissions
-- Verify VPC endpoint for X-Ray (if no NAT)
 
 ## Summary
 
