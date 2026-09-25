@@ -913,7 +913,7 @@ service:
                 ],
                 ports: [{ containerPort: config.appPort }],
                 env: [
-                  { name: "SERVER_PORT", value: String(config.appPort)},
+                  { name: "SERVER_PORT", value: String(config.appPort) },
                   { name: "SPRING_PROFILES_ACTIVE", value: "eks" },
                   { name: "SPRING_DATASOURCE_URL", value: jdbcUrl },
                   { name: "SPRING_DATASOURCE_USERNAME", value: "postgres" },
