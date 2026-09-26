@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This document describes how to deploy the app on AWS using Docker and AWS CDK.
+This document describes how to deploy the app on AWS using EKS.
 
 The deployment consists of:
 - creating the AWS infrastructure required by the app
